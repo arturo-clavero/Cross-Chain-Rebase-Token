@@ -5,9 +5,10 @@ import "forge-std/Test.sol";
 import "../src/RebaseToken.sol";
 import "../script/DeployRebaseToken.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract RebaseTokenTest is Test {
-    RebaseToken token;
+    RebaseToken private token;
 
     address admin   = address(0xA);
     address minter  = address(0xB);
@@ -18,8 +19,9 @@ contract RebaseTokenTest is Test {
 
     function setUp() public {
         DeployRebaseToken deployed = new DeployRebaseToken();
-        token = deployed.run("Rebase Token", "RBT", admin);
+        deployed.run("Rebase Token", "RBT", admin);
 
+        token = deployed.rebaseToken();
         // Grant roles
         vm.startPrank(admin);
         token.grantRole(token.MINTER_ROLE(), minter);
