@@ -9,10 +9,10 @@ contract DeployRebaseToken is Script {
 
     function setUp() public {}
 
-    function run(string memory _name, string memory _symbol) public returns(RebaseToken) {
+    function run(string memory _name, string memory _symbol, address admin) public returns(RebaseToken) {
         vm.startBroadcast();
 
-        rebaseToken = new RebaseToken(_name, _symbol);
+        rebaseToken = new RebaseToken(_name, _symbol, admin);
 
         vm.stopBroadcast();
 
