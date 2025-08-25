@@ -11,6 +11,7 @@ contract RejectEth {
     error UnwantedMoney(bool rejects);
 
     bool private rejects;
+
     constructor() {
         rejects = true;
     }
@@ -27,10 +28,10 @@ contract RejectEth {
 }
 
 contract VaultTest is Test {
-    uint256 constant private FUND_AMOUNT = 10 ether;
-    uint256 constant private DEPOSIT_AMOUNT = 2 ether;
-    uint256 constant private INVALID_WITHDRAWAL_AMOUNT = 3 ether;
-    uint256 constant private VALID_WITHDRAWAL_AMOUNT = 1 ether;
+    uint256 private constant FUND_AMOUNT = 10 ether;
+    uint256 private constant DEPOSIT_AMOUNT = 2 ether;
+    uint256 private constant INVALID_WITHDRAWAL_AMOUNT = 3 ether;
+    uint256 private constant VALID_WITHDRAWAL_AMOUNT = 1 ether;
     address public user1 = address(0x1);
     address public user2 = address(0x2);
     address public admin = address(0x3);
@@ -102,12 +103,11 @@ contract VaultTest is Test {
         vm.prank(user1);
         vault.deposit{value: DEPOSIT_AMOUNT}();
         vm.startPrank(user1);
-        vm.expectRevert(abi.encodeWithSelector(
-            IERC20Errors.ERC20InsufficientBalance.selector,
-            user1,
-            token.balanceOf(user1),
-            INVALID_WITHDRAWAL_AMOUNT
-        )); // mock token will revert if burn > balance
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientBalance.selector, user1, token.balanceOf(user1), INVALID_WITHDRAWAL_AMOUNT
+            )
+        ); // mock token will revert if burn > balance
         vault.withdraw(INVALID_WITHDRAWAL_AMOUNT);
         vm.stopPrank();
     }

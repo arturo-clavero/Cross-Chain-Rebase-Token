@@ -10,12 +10,12 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 contract RebaseTokenTest is Test {
     RebaseToken private token;
 
-    address admin   = address(0xA);
-    address minter  = address(0xB);
-    address burner  = address(0xC);
+    address admin = address(0xA);
+    address minter = address(0xB);
+    address burner = address(0xC);
     address manager = address(0xD);
-    address user1   = address(0x1);
-    address user2   = address(0x2);
+    address user1 = address(0x1);
+    address user2 = address(0x2);
 
     function setUp() public {
         DeployRebaseToken deployed = new DeployRebaseToken();
@@ -46,9 +46,9 @@ contract RebaseTokenTest is Test {
         assertTrue(newToken.hasRole(newToken.DEFAULT_ADMIN_ROLE(), address(this)));
     }
 
-//     // -----------------------
-//     // MINT / BURN (roles)
-//     // -----------------------
+    // -----------------------
+    // MINT / BURN (roles)
+    // -----------------------
     function testMintWithRole() public {
         vm.prank(minter);
         token.mint(user1, 5 ether);
@@ -57,11 +57,8 @@ contract RebaseTokenTest is Test {
 
     function testCanNotMintWithoutRole() public {
         vm.startPrank(user1);
-        vm.expectRevert(abi.encodeWithSelector(
-            IAccessControl.AccessControlUnauthorizedAccount.selector, 
-            user1, 
-            token.MINTER_ROLE()
-            )
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user1, token.MINTER_ROLE())
         );
         token.mint(user1, 5 ether); // should revert
         vm.stopPrank();
@@ -82,22 +79,19 @@ contract RebaseTokenTest is Test {
         vm.startPrank(minter);
         token.mint(user1, 3 ether);
         vm.stopPrank();
-        
+
         console.log("user 1 is: ", user1);
         vm.startPrank(user1);
-        vm.expectRevert(abi.encodeWithSelector(
-            IAccessControl.AccessControlUnauthorizedAccount.selector, 
-            user1, 
-            token.BURNER_ROLE()
-            )
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user1, token.BURNER_ROLE())
         );
         token.burn(user1, 1 ether); // should revert
         vm.stopPrank();
     }
 
-//     // -----------------------
-//     // INDEX MANAGEMENT (roles)
-//     // -----------------------
+    // -----------------------
+    // INDEX MANAGEMENT (roles)
+    // -----------------------
     function testUpdateGlobalIndexWithRole() public {
         vm.prank(manager);
         token.updateGlobalIndex(2e18);
@@ -106,10 +100,9 @@ contract RebaseTokenTest is Test {
 
     function testCanNotUpdateGlobalIndexWithoutRole() public {
         vm.startPrank(user1);
-        vm.expectRevert(abi.encodeWithSelector(
-            IAccessControl.AccessControlUnauthorizedAccount.selector,
-            user1,
-            token.INDEX_MANAGER_ROLE()
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, user1, token.INDEX_MANAGER_ROLE()
             )
         );
         token.updateGlobalIndex(2e18); // should revert
@@ -127,9 +120,9 @@ contract RebaseTokenTest is Test {
         assertEq(token.balanceOf(user1), 4 ether); // balance should grow
     }
 
-//     // -----------------------
-//     // TRANSFERS
-//     // -----------------------
+    // -----------------------
+    // TRANSFERS
+    // -----------------------
     function testTransfer() public {
         vm.prank(minter);
         token.mint(user1, 3 ether);
@@ -154,9 +147,9 @@ contract RebaseTokenTest is Test {
         assertEq(token.balanceOf(user2), 2 ether);
     }
 
-//     // -----------------------
-//     // CONVERSION
-//     // -----------------------
+    // -----------------------
+    // CONVERSION
+    // -----------------------
     function testRawToEthAndEthToRaw() public {
         vm.prank(minter);
         token.mint(user1, 1 ether); // 1 ETH
