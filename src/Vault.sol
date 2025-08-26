@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {PriceConverter} from "./libs/PriceConverter.sol";
 
 struct Debt {
     uint256 debt;
@@ -211,7 +212,7 @@ contract Vault is ReentrancyGuard, AccessControl {
     }
 
     //getters
-    function getGlobalIndex() external view returns (uint256){
+    function getGlobalIndex() external view returns (uint256) {
         return globalIndex;
     }
 
@@ -225,14 +226,14 @@ contract Vault is ReentrancyGuard, AccessControl {
         collateralPerToken[_token] = Collateral({priceFeed: _priceFeed, LVM: _LVM});
     }
 
-    //MATH
-    // function absDiff(uint256 a, uint256 b) internal pure returns (uint256) {
-    //     return a > b ? a - b : b - a;
-    // }
-
-    function maxEthFrom(address token, uint256 amount) internal pure returns (uint256) {
+    //math
+    function maxEthFrom(address token, uint256 amount) internal view returns (uint256) {
         //TODO!
-
-        return amount;
+        Collateral memory collateral = collateralPerToken[token];
+        if (collateral.priceFeed == address(0)) {
+            revert Borrow__collateralTokenNotSupported(token);
+        }
+        uint256 amountInEth = PriceConverter.getRates(amount, collateral.priceFeed);
+        return amountInEth * WAD / collateral.LVM;
     }
 }

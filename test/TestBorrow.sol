@@ -7,6 +7,7 @@ import "../src/Vault.sol";
 import "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 import {RejectEth} from "./mocks/RejectEth.sol";
+import {PriceFeedMock} from "./mocks/PriceFeedMock.sol";
 
 contract BorrowTest is Test {
     uint256 public constant FUND_AMOUNT = 2 ether;
@@ -17,8 +18,9 @@ contract BorrowTest is Test {
     address public interestManager = address(0x3);
     address public collateralManager = address(0x4);
     address public depositer = address(0x5);
+    PriceFeedMock public mockPriceFeed = new PriceFeedMock(1);
     RejectEth public rejector = new RejectEth();
- 
+
     Vault private borrow;
     ERC20Mock public token;
 
@@ -39,7 +41,7 @@ contract BorrowTest is Test {
         //mock collateral token :
         token = new ERC20Mock();
         vm.prank(collateralManager);
-        borrow.modifyCollateral(address(token), address(0xfeed), 2e18);
+        borrow.modifyCollateral(address(token), address(mockPriceFeed), 1e18);
         //give collateral token to users and set allowance
         token.mint(user, COLLATERAL_TOKEN_FUND_AMOUNT);
         vm.prank(user);
@@ -87,24 +89,21 @@ contract BorrowTest is Test {
         vm.startPrank(user);
         vm.expectRevert(Vault.Borrow__insufficientAllowance.selector);
         borrow.borrow(address(tokenNoAllowance), 1e18);
-        vm.stopPrank(); 
+        vm.stopPrank();
     }
 
     function testNotEnoughEthToBorrow() public {
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(
-            Vault.Borrow__notEnoughEthToBorrow.selector,
-            DEPOSIT_AMOUNT
-        ));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__notEnoughEthToBorrow.selector, DEPOSIT_AMOUNT));
         borrow.borrow(address(token), DEPOSIT_AMOUNT * 2);
-        vm.stopPrank(); 
+        vm.stopPrank();
     }
 
     function testBorrowerRejectsEthBorrowed() public {
         vm.startPrank(address(rejector));
         vm.expectRevert(Vault.Borrow__invalidTransfer.selector);
         borrow.borrow(address(token), 1e18);
-        vm.stopPrank(); 
+        vm.stopPrank();
     }
     // ---------- REPAY TESTS ----------
 
@@ -170,10 +169,7 @@ contract BorrowTest is Test {
 
     function testRepayNoDebtForCollateral() public {
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(
-            Vault.Borrow__noDebtForCollateral.selector,
-            address(token)
-            ));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__noDebtForCollateral.selector, address(token)));
         borrow.repay{value: 1}(address(token));
         vm.stopPrank();
     }
@@ -229,9 +225,7 @@ contract BorrowTest is Test {
     function testAddCollateral_RevertIfAlreadyExists() public {
         // token already added in setUp()
         vm.startPrank(collateralManager);
-        vm.expectRevert(
-            abi.encodeWithSelector(Vault.Borrow__collateralAlreadyExists.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__collateralAlreadyExists.selector));
         borrow.addCollateral(address(token), address(0xfeed), 2e18);
         vm.stopPrank();
     }
@@ -297,15 +291,13 @@ contract BorrowTest is Test {
         borrow.modifyCollateralPriceFeed(address(token), address(0xdead));
         vm.stopPrank();
 
-        (address priceFeed, ) = borrow.collateralPerToken(address(token));
+        (address priceFeed,) = borrow.collateralPerToken(address(token));
         assertEq(priceFeed, address(0xdead));
     }
 
     function testModifyCollateralPriceFeed_RevertIfZeroFeed() public {
         vm.startPrank(collateralManager);
-        vm.expectRevert(
-            abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector));
         borrow.modifyCollateralPriceFeed(address(token), address(0));
         vm.stopPrank();
     }
@@ -313,9 +305,7 @@ contract BorrowTest is Test {
     function testModifyCollateralPriceFeed_RevertIfCollateralDoesNotExist() public {
         ERC20Mock newToken = new ERC20Mock();
         vm.startPrank(collateralManager);
-        vm.expectRevert(
-            abi.encodeWithSelector(Vault.Borrow__collateralDoesNotExist.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__collateralDoesNotExist.selector));
         borrow.modifyCollateralPriceFeed(address(newToken), address(0x1234));
         vm.stopPrank();
     }
@@ -338,9 +328,7 @@ contract BorrowTest is Test {
 
     function testModifyCollateralLVM_RevertIfTooLow() public {
         vm.startPrank(collateralManager);
-        vm.expectRevert(
-            abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector));
         borrow.modifyCollateralLVM(address(token), 0.5e18);
         vm.stopPrank();
     }
@@ -348,9 +336,7 @@ contract BorrowTest is Test {
     function testModifyCollateralLVM_RevertIfCollateralDoesNotExist() public {
         ERC20Mock newToken = new ERC20Mock();
         vm.startPrank(collateralManager);
-        vm.expectRevert(
-            abi.encodeWithSelector(Vault.Borrow__collateralDoesNotExist.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__collateralDoesNotExist.selector));
         borrow.modifyCollateralLVM(address(newToken), 2e18);
         vm.stopPrank();
     }
@@ -361,8 +347,4 @@ contract BorrowTest is Test {
         borrow.modifyCollateralLVM(address(token), 2e18);
         vm.stopPrank();
     }
-
-    //MATH HELPERS
-
-
 }

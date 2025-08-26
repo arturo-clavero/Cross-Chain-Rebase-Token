@@ -18,7 +18,6 @@ contract RejectEth {
         rejects = true;
     }
 
-
     fallback() external payable {
         if (rejects) {
             revert UnwantedMoney(rejects);

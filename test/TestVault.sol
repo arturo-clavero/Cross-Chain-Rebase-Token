@@ -20,7 +20,6 @@ contract VaultTest is Test {
     Vault private vault;
     RebaseToken private token;
 
-
     function setUp() public {
         DeployRebaseToken deployed = new DeployRebaseToken();
         deployed.run("Rebase Token", "RBT", admin);
