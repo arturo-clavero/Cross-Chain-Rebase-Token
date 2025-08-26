@@ -12,8 +12,6 @@ contract DeployRebaseToken is Script {
     RebaseToken public rebaseToken;
     Vault public vault;
 
-    function setUp() public {}
-
     function run(string memory _name, string memory _symbol, address _admin) public {
         //deploy token and vault:
 

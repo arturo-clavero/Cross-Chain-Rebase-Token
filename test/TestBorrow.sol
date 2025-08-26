@@ -5,23 +5,8 @@ import "forge-std/Test.sol";
 import "../script/DeployRebaseToken.sol";
 import "../src/Vault.sol";
 import "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-
-contract ERC20Mock is ERC20 {
-    constructor() ERC20("ERC20Mock", "E20M") {}
-
-    function mint(address account, uint256 amount) external {
-        _mint(account, amount);
-    }
-
-    function burn(address account, uint256 amount) external {
-        _burn(account, amount);
-    }
-
-    function _approve(address owner, address spender, uint256 amount, bool) internal virtual override {
-        super._approve(owner, spender, amount, true);
-    }
-}
+import {ERC20Mock} from "./mocks/ERC20Mock.sol";
+import {RejectEth} from "./mocks/RejectEth.sol";
 
 contract BorrowTest is Test {
     uint256 public constant FUND_AMOUNT = 2 ether;
@@ -32,7 +17,8 @@ contract BorrowTest is Test {
     address public interestManager = address(0x3);
     address public collateralManager = address(0x4);
     address public depositer = address(0x5);
-
+    RejectEth public rejector = new RejectEth();
+ 
     Vault private borrow;
     ERC20Mock public token;
 
@@ -44,6 +30,7 @@ contract BorrowTest is Test {
         vm.deal(user, FUND_AMOUNT);
         vm.deal(interestManager, FUND_AMOUNT);
         vm.deal(collateralManager, FUND_AMOUNT);
+        vm.deal(address(rejector), FUND_AMOUNT);
         //grant roles
         vm.startPrank(admin);
         borrow.grantRole(borrow.INTEREST_MANAGER_ROLE(), interestManager);
@@ -51,11 +38,15 @@ contract BorrowTest is Test {
         vm.stopPrank();
         //mock collateral token :
         token = new ERC20Mock();
+        vm.prank(collateralManager);
+        borrow.modifyCollateral(address(token), address(0xfeed), 2e18);
+        //give collateral token to users and set allowance
         token.mint(user, COLLATERAL_TOKEN_FUND_AMOUNT);
         vm.prank(user);
         token.approve(address(borrow), type(uint256).max);
-        vm.prank(collateralManager);
-        borrow.modifyCollateral(address(token), address(0xfeed), 2e18);
+        token.mint(address(rejector), COLLATERAL_TOKEN_FUND_AMOUNT);
+        vm.prank(address(rejector));
+        token.approve(address(borrow), type(uint256).max);
         //deposit eth
         vm.deal(depositer, DEPOSIT_AMOUNT);
         vm.prank(depositer);
@@ -88,6 +79,33 @@ contract BorrowTest is Test {
         vm.stopPrank();
     }
 
+    function testBorrowInsufficientAllowance() public {
+        ERC20Mock tokenNoAllowance = new ERC20Mock();
+        tokenNoAllowance.mint(user, COLLATERAL_TOKEN_FUND_AMOUNT);
+        vm.prank(collateralManager);
+        borrow.modifyCollateral(address(tokenNoAllowance), address(0xfeed), 2e18);
+        vm.startPrank(user);
+        vm.expectRevert(Vault.Borrow__insufficientAllowance.selector);
+        borrow.borrow(address(tokenNoAllowance), 1e18);
+        vm.stopPrank(); 
+    }
+
+    function testNotEnoughEthToBorrow() public {
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(
+            Vault.Borrow__notEnoughEthToBorrow.selector,
+            DEPOSIT_AMOUNT
+        ));
+        borrow.borrow(address(token), DEPOSIT_AMOUNT * 2);
+        vm.stopPrank(); 
+    }
+
+    function testBorrowerRejectsEthBorrowed() public {
+        vm.startPrank(address(rejector));
+        vm.expectRevert(Vault.Borrow__invalidTransfer.selector);
+        borrow.borrow(address(token), 1e18);
+        vm.stopPrank(); 
+    }
     // ---------- REPAY TESTS ----------
 
     function testPartialRepayUpdatesDebtAndCollateral() public {
@@ -128,10 +146,35 @@ contract BorrowTest is Test {
         vm.stopPrank();
     }
 
+    function testRefundsExcessInvalidTransfer() public {
+        rejector.acceptPayment();
+        vm.prank(address(rejector));
+        borrow.borrow(address(token), 1e18);
+
+        rejector.rejectPayment();
+        vm.startPrank(address(rejector));
+        uint256 balBefore = token.balanceOf(address(rejector));
+        vm.expectRevert(Vault.Borrow__invalidTransfer.selector);
+        borrow.repay{value: 2 ether}(address(token));
+        uint256 balAfter = token.balanceOf(address(rejector));
+        vm.stopPrank();
+        assertEq(balBefore, balAfter);
+    }
+
     function testRepayZeroReverts() public {
         vm.startPrank(user);
         vm.expectRevert(Vault.Borrow__invalidAmount.selector);
         borrow.repay{value: 0}(address(token));
+        vm.stopPrank();
+    }
+
+    function testRepayNoDebtForCollateral() public {
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(
+            Vault.Borrow__noDebtForCollateral.selector,
+            address(token)
+            ));
+        borrow.repay{value: 1}(address(token));
         vm.stopPrank();
     }
 
@@ -182,4 +225,144 @@ contract BorrowTest is Test {
         borrow.modifyCollateral(address(token), address(0x1234), 3e18);
         vm.stopPrank();
     }
+
+    function testAddCollateral_RevertIfAlreadyExists() public {
+        // token already added in setUp()
+        vm.startPrank(collateralManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(Vault.Borrow__collateralAlreadyExists.selector)
+        );
+        borrow.addCollateral(address(token), address(0xfeed), 2e18);
+        vm.stopPrank();
+    }
+
+    function testAddCollateral_SuccessForNewToken() public {
+        ERC20Mock newToken = new ERC20Mock();
+        console.log(address(newToken), address(token));
+        vm.startPrank(collateralManager);
+        borrow.addCollateral(address(newToken), address(0xbeef), 3e18);
+        vm.stopPrank();
+
+        (address priceFeed, uint256 lvm) = borrow.collateralPerToken(address(newToken));
+        assertEq(priceFeed, address(0xbeef));
+        assertEq(lvm, 3e18);
+    }
+
+    function testAddCollateral_RevertsIfNotCollateralManager() public {
+        ERC20Mock newToken = new ERC20Mock();
+
+        vm.startPrank(user);
+        vm.expectRevert(); // AccessControl revert
+        borrow.addCollateral(address(newToken), address(0xbeef), 3e18);
+        vm.stopPrank();
+    }
+
+    function testModifyCollateral_Success() public {
+        vm.startPrank(collateralManager);
+        borrow.modifyCollateral(address(token), address(0x1234), 4e18);
+        vm.stopPrank();
+
+        (address priceFeed, uint256 lvm) = borrow.collateralPerToken(address(token));
+        assertEq(priceFeed, address(0x1234));
+        assertEq(lvm, 4e18);
+    }
+
+    function testModifyCollateral_RevertIfInvalidParams() public {
+        vm.startPrank(collateralManager);
+
+        // zero token
+        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector));
+        borrow.modifyCollateral(address(0), address(0x1234), 3e18);
+
+        // zero priceFeed
+        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector));
+        borrow.modifyCollateral(address(token), address(0), 3e18);
+
+        // too low LVM
+        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector));
+        borrow.modifyCollateral(address(token), address(0x1234), 0.5e18);
+
+        vm.stopPrank();
+    }
+
+    function testModifyCollateral_RevertsIfNotCollateralManager() public {
+        vm.startPrank(user);
+        vm.expectRevert(); // AccessControl revert
+        borrow.modifyCollateral(address(token), address(0x1234), 3e18);
+        vm.stopPrank();
+    }
+
+    function testModifyCollateralPriceFeed_Success() public {
+        vm.startPrank(collateralManager);
+        borrow.modifyCollateralPriceFeed(address(token), address(0xdead));
+        vm.stopPrank();
+
+        (address priceFeed, ) = borrow.collateralPerToken(address(token));
+        assertEq(priceFeed, address(0xdead));
+    }
+
+    function testModifyCollateralPriceFeed_RevertIfZeroFeed() public {
+        vm.startPrank(collateralManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector)
+        );
+        borrow.modifyCollateralPriceFeed(address(token), address(0));
+        vm.stopPrank();
+    }
+
+    function testModifyCollateralPriceFeed_RevertIfCollateralDoesNotExist() public {
+        ERC20Mock newToken = new ERC20Mock();
+        vm.startPrank(collateralManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(Vault.Borrow__collateralDoesNotExist.selector)
+        );
+        borrow.modifyCollateralPriceFeed(address(newToken), address(0x1234));
+        vm.stopPrank();
+    }
+
+    function testModifyCollateralPriceFeed_RevertIfNotCollateralManager() public {
+        vm.startPrank(user);
+        vm.expectRevert(); // AccessControl revert
+        borrow.modifyCollateralPriceFeed(address(token), address(0x1234));
+        vm.stopPrank();
+    }
+
+    function testModifyCollateralLVM_Success() public {
+        vm.startPrank(collateralManager);
+        borrow.modifyCollateralLVM(address(token), 5e18);
+        vm.stopPrank();
+
+        (, uint256 lvm) = borrow.collateralPerToken(address(token));
+        assertEq(lvm, 5e18);
+    }
+
+    function testModifyCollateralLVM_RevertIfTooLow() public {
+        vm.startPrank(collateralManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector)
+        );
+        borrow.modifyCollateralLVM(address(token), 0.5e18);
+        vm.stopPrank();
+    }
+
+    function testModifyCollateralLVM_RevertIfCollateralDoesNotExist() public {
+        ERC20Mock newToken = new ERC20Mock();
+        vm.startPrank(collateralManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(Vault.Borrow__collateralDoesNotExist.selector)
+        );
+        borrow.modifyCollateralLVM(address(newToken), 2e18);
+        vm.stopPrank();
+    }
+
+    function testModifyCollateralLVM_RevertIfNotCollateralManager() public {
+        vm.startPrank(user);
+        vm.expectRevert(); // AccessControl revert
+        borrow.modifyCollateralLVM(address(token), 2e18);
+        vm.stopPrank();
+    }
+
+    //MATH HELPERS
+
+
 }

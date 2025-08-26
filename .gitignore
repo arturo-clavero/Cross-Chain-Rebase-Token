@@ -3,3 +3,4 @@ lib
 cache
 out
 coverage.txt
+lcov.info

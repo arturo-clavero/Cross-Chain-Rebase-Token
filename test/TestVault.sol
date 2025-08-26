@@ -6,26 +6,7 @@ import "../script/DeployRebaseToken.sol";
 import "../src/Vault.sol";
 import "../src/RebaseToken.sol";
 import "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
-
-contract RejectEth {
-    error UnwantedMoney(bool rejects);
-
-    bool private rejects;
-
-    constructor() {
-        rejects = true;
-    }
-
-    function stopRejectionOfPayment() external {
-        rejects = false;
-    }
-
-    fallback() external payable {
-        if (rejects) {
-            revert UnwantedMoney(rejects);
-        }
-    }
-}
+import {RejectEth} from "./mocks/RejectEth.sol";
 
 contract VaultTest is Test {
     uint256 private constant FUND_AMOUNT = 10 ether;
@@ -39,6 +20,7 @@ contract VaultTest is Test {
     Vault private vault;
     RebaseToken private token;
 
+
     function setUp() public {
         DeployRebaseToken deployed = new DeployRebaseToken();
         deployed.run("Rebase Token", "RBT", admin);
@@ -48,6 +30,19 @@ contract VaultTest is Test {
         vm.deal(user1, FUND_AMOUNT);
         vm.deal(user2, FUND_AMOUNT);
         vm.deal(userRejector, FUND_AMOUNT);
+    }
+
+    function testInitialGlobalIndex() public view {
+        assertEq(vault.getGlobalIndex(), 1e18);
+    }
+
+    function testAdminIsGrantedProperly() public view {
+        assertTrue(vault.hasRole(token.DEFAULT_ADMIN_ROLE(), admin));
+    }
+
+    function testNoAdminInConstructorDefaultsToMsgSender() public {
+        Vault newVault = new Vault(address(new RebaseToken("X", "X", address(0))), address(0));
+        assertTrue(newVault.hasRole(newVault.DEFAULT_ADMIN_ROLE(), address(this)));
     }
 
     function testDepositToSelf() public {
@@ -63,6 +58,15 @@ contract VaultTest is Test {
 
         assertEq(token.balanceOf(user2), DEPOSIT_AMOUNT, "user2 should have minted tokens");
         assertEq(token.balanceOf(user1), 0, "user1 should have 0 tokens");
+    }
+
+    function testTotalDepositMultipleDeposits() public {
+        vm.prank(user1);
+        vault.depositTo{value: DEPOSIT_AMOUNT}(user2);
+        assertEq(vault.getTotalDeposits(), DEPOSIT_AMOUNT);
+        vm.prank(user2);
+        vault.deposit{value: DEPOSIT_AMOUNT}();
+        assertEq(vault.getTotalDeposits(), DEPOSIT_AMOUNT * 2);
     }
 
     function testDepositRevertOnZero() public {

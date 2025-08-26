@@ -98,13 +98,12 @@ contract Vault is ReentrancyGuard, AccessControl {
         if (IERC20(token).allowance(msg.sender, address(this)) < amount) {
             revert Borrow__insufficientAllowance();
         }
-        //add for max eth to get! TODO not enough eth to borrow
-
-        //EFFECT:
         uint256 borrowedEth = maxEthFrom(token, amount);
         if (borrowedEth > totalDeposits) {
             revert Borrow__notEnoughEthToBorrow(totalDeposits);
         }
+
+        //EFFECT
         uint256 scaledEth = borrowedEth * WAD / globalIndex;
         debtPerTokenPerUser[msg.sender][token].debt += scaledEth;
         debtPerTokenPerUser[msg.sender][token].collateral += amount;
@@ -185,7 +184,7 @@ contract Vault is ReentrancyGuard, AccessControl {
         external
         onlyRole(COLLATERAL_MANAGER_ROLE)
     {
-        if (collateralPerToken[_token].LVM == 0) {
+        if (collateralPerToken[_token].LVM != 0) {
             revert Borrow__collateralAlreadyExists();
         }
         modifyCollateral(_token, _priceFeed, _LVM);
@@ -211,6 +210,11 @@ contract Vault is ReentrancyGuard, AccessControl {
         collateralPerToken[_token].LVM = _LVM;
     }
 
+    //getters
+    function getGlobalIndex() external view returns (uint256){
+        return globalIndex;
+    }
+
     function modifyCollateral(address _token, address _priceFeed, uint256 _LVM)
         public
         onlyRole(COLLATERAL_MANAGER_ROLE)
@@ -222,9 +226,9 @@ contract Vault is ReentrancyGuard, AccessControl {
     }
 
     //MATH
-    function absDiff(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a > b ? a - b : b - a;
-    }
+    // function absDiff(uint256 a, uint256 b) internal pure returns (uint256) {
+    //     return a > b ? a - b : b - a;
+    // }
 
     function maxEthFrom(address token, uint256 amount) internal pure returns (uint256) {
         //TODO!
