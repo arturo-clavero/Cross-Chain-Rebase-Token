@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import "../src/RebaseToken.sol";
+import "../code/RebaseToken.sol";
 import "../script/DeployRebaseToken.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";

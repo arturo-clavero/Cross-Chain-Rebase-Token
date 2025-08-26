@@ -3,8 +3,8 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../script/DeployRebaseToken.sol";
-import "../src/Vault.sol";
-import "../src/RebaseToken.sol";
+import "../code/Vault.sol";
+import "../code/RebaseToken.sol";
 import "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {RejectEth} from "./mocks/RejectEth.sol";
 

@@ -3,21 +3,28 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../script/DeployRebaseToken.sol";
-import "../src/Vault.sol";
+import "../code/Vault.sol";
 import "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 import {RejectEth} from "./mocks/RejectEth.sol";
 import {PriceFeedMock} from "./mocks/PriceFeedMock.sol";
+import {PriceConverter} from "../code/libs/PriceConverter.sol";
+import {RebaseToken} from "../code/RebaseToken.sol";
+import "@openzeppelin/contracts/access/IAccessControl.sol";
 
 contract BorrowTest is Test {
-    uint256 public constant FUND_AMOUNT = 2 ether;
-    uint256 public constant DEPOSIT_AMOUNT = 10 ether;
+    uint256 public constant FUND_AMOUNT = 100 ether;
+    uint256 public constant DEPOSIT_AMOUNT = 500 ether;
     uint256 public constant COLLATERAL_TOKEN_FUND_AMOUNT = 1e24;
     address public user = address(0x1);
     address public admin = address(0x2);
     address public interestManager = address(0x3);
     address public collateralManager = address(0x4);
     address public depositer = address(0x5);
+    address public liquidator = address(0x6);
+    address public rebaseTokenIndexManager = address(0x7);
+    uint256 public constant WAD = 1e18;
+    RebaseToken public rebaseToken;
     PriceFeedMock public mockPriceFeed = new PriceFeedMock(1);
     RejectEth public rejector = new RejectEth();
 
@@ -28,15 +35,21 @@ contract BorrowTest is Test {
         DeployRebaseToken deployed = new DeployRebaseToken();
         deployed.run("Rebase Token", "RBT", admin);
         borrow = deployed.vault();
+        rebaseToken = deployed.rebaseToken();
         // fund users with ETH for testing
         vm.deal(user, FUND_AMOUNT);
         vm.deal(interestManager, FUND_AMOUNT);
         vm.deal(collateralManager, FUND_AMOUNT);
         vm.deal(address(rejector), FUND_AMOUNT);
+        vm.deal(liquidator, FUND_AMOUNT);
+        vm.deal(admin, FUND_AMOUNT);
+        vm.deal(rebaseTokenIndexManager, FUND_AMOUNT);
         //grant roles
         vm.startPrank(admin);
         borrow.grantRole(borrow.INTEREST_MANAGER_ROLE(), interestManager);
         borrow.grantRole(borrow.COLLATERAL_MANAGER_ROLE(), collateralManager);
+        borrow.grantRole(borrow.LIQUIDATOR_ROLE(), liquidator);
+        rebaseToken.grantRole(rebaseToken.INDEX_MANAGER_ROLE(), address(borrow));
         vm.stopPrank();
         //mock collateral token :
         token = new ERC20Mock();
@@ -53,6 +66,10 @@ contract BorrowTest is Test {
         vm.deal(depositer, DEPOSIT_AMOUNT);
         vm.prank(depositer);
         borrow.deposit{value: DEPOSIT_AMOUNT}();
+        //add rebase token interest manager role
+        // rebaseToken = deployed.rebaseToken();
+        // vm.prank(admin);
+        // rebaseToken.grantRole(rebaseToken.INDEX_MANAGER_ROLE(), rebaseTokenIndexManager);
     }
 
     // ---------- BORROW TESTS ----------
@@ -347,4 +364,105 @@ contract BorrowTest is Test {
         borrow.modifyCollateralLVM(address(token), 2e18);
         vm.stopPrank();
     }
+
+    function testCannotLiquidateNoDebtUser() public {
+        vm.prank(liquidator);
+        vm.expectRevert(PriceConverter.PriceConverter__InvalidAmount.selector);
+        borrow.liquidate(user, address(token));
+    }
+
+    function testCannotLiquidateHealthyUser() public {
+        vm.prank(user);
+        borrow.borrow(address(token), 1e18);
+        vm.prank(interestManager);
+        borrow.accrueInterest(1e17);
+        vm.prank(liquidator);
+        vm.expectRevert(Vault.Borrow__invalidAmount.selector);
+        borrow.liquidate(user, address(token));
+    }
+
+    function testLiquidatorMustSendETH() public {
+        // Simulate undercollateralized user
+        vm.prank(user);
+        token.approve(address(borrow), 100 * WAD);
+        vm.prank(user);
+        borrow.borrow(address(token), 100 * WAD);
+
+        vm.prank(liquidator);
+        vm.expectRevert(Vault.Borrow__userNotUnderCollaterlized.selector);
+        borrow.liquidate(user, address(token));
+    }
+
+    function testFullLiquidation() public {
+
+        vm.prank(user);
+        borrow.borrow(address(token), 1);
+
+        vm.prank(interestManager);
+        borrow.accrueInterest(10e17);       
+
+        // Pay full debt
+        (uint256 realDebt, ) = borrow.debtPerTokenPerUser(user, address(token));
+        uint256 ethToPay = realDebt * borrow.getGlobalIndex() / WAD;
+
+        vm.prank(liquidator);
+        borrow.liquidate{value: ethToPay}(user, address(token));
+
+        (uint256 debt, uint256 collat) = borrow.debtPerTokenPerUser(user, address(token));
+        assertEq(debt, 0, "Debt should be zero after full liquidation");
+        assertEq(collat, 0, "Collateral should be zero after full liquidation");
+
+        uint256 liquidatorBal = token.balanceOf(liquidator);
+        assertTrue(liquidatorBal > 0, "Liquidator should receive all collateral");
+    }
+
+    function testExcessETHRefund() public {
+        vm.prank(user);
+        borrow.borrow(address(token), 1 * WAD);
+
+        vm.prank(interestManager);
+        borrow.accrueInterest(5e17); 
+
+        (uint256 realDebt, ) = borrow.debtPerTokenPerUser(user, address(token));
+        uint256 ethToPay = realDebt * borrow.getGlobalIndex() / WAD;
+
+
+        // Send extra ETH
+        uint256 excess = 5 ether;
+
+        vm.deal(liquidator, 10 ether);
+        uint256 initialBal = liquidator.balance;
+        vm.prank(liquidator);
+        borrow.liquidate{value: ethToPay + excess}(user, address(token));
+
+        uint256 finalBal = liquidator.balance;
+        assertEq(initialBal - ethToPay, finalBal, "Excess ETH should be refunded");
+    }
+
+//interest of rebase token:
+    function testUpdateRebaseTokenInterest_NotAuthorized() public {
+        vm.startPrank(user);
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, borrow.INTEREST_MANAGER_ROLE())
+        );
+        borrow.updateRebaseTokenInterest();
+        vm.stopPrank();
+    }
+
+    function testUpdateRebaseTokenInterest_NoInterests() public {
+        vm.prank(interestManager);
+        borrow.updateRebaseTokenInterest();
+
+        uint256 globalIndex = rebaseToken.getGlobalIndex();
+        assertEq(globalIndex, WAD, "Index should remain 1.0 if no interest");
+    }
+
+    function testUpdateRebaseTokenInterest_WithBorrow() public {
+        testFullRepayReturnsCollateralAndRefundsExcess();
+        vm.prank(interestManager);
+        borrow.updateRebaseTokenInterest();
+        uint256 globalIndex = rebaseToken.getGlobalIndex();
+        assertGt(globalIndex, WAD, "Index should grow with interest");
+    }
+
 }
