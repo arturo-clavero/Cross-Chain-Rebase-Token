@@ -3,4 +3,6 @@ lib
 cache
 out
 coverage.txt
+coveragee.txt
 lcov.info
+lib
