@@ -114,3 +114,31 @@ More detailed documentation is available in the `documentation` folder:
 * `PriceConverter.md` – Collateral conversion mechanics
 * `Whitepaper.md` – High-level overview, purpose, and intended usage
 
+## Deployment on testnet
+
+### Contract addresses:
+
+  Deployed Rebase Token:  0x83c49E13252bf6525C3470b708a3D4A7ba82C99D
+  Deployed vault:  0x1FB9DCb6F219E325C7Fe1D59697a86f96E11DD5e
+
+### Transaction hashes of testnet deployment:
+
+#### Rebase Token
+Hash: 0xf756b5a95652df97dc5af055175e75e2b5f77e6d8447b0bc53619a8ea040d425
+Contract Address: 0x83c49E13252bf6525C3470b708a3D4A7ba82C99D
+Block: 9072888
+
+#### Vault:
+Hash: 0x9404189f130130f963d4c484a865fe7ece3f3198b8b1e27c04f7b693ad35ec10
+Contract Address: 0x1FB9DCb6F219E325C7Fe1D59697a86f96E11DD5e
+Block: 9072888
+
+#### Other Transactions:
+Hash: 0xb16b24803f489cf2779474124743e9c0f5eeb2abbf587c22b3ac159d33866070
+Block: 9072888
+
+Hash: 0x22c9a506b9de5025de9753d5b5a8e3be31e66bc52e151e8f0b09c1ed8974d43a
+Block: 9072888
+
+Hash: 0xc1534cc0b54bf20dff1a57df77210e2b0345193f234f639942ff1a7227a77552
+Block: 9072888
