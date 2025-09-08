@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {RejectEth} from "./mocks/RejectEth.sol";
 
 contract VaultLendBase is Test {
+    uint256 public constant WAD = 1e18;
     uint256 internal constant FUND_AMOUNT = 10 ether;
     uint256 internal constant DEPOSIT_AMOUNT = 2 ether;
     uint256 internal constant INVALID_WITHDRAWAL_AMOUNT = 3 ether;
@@ -19,6 +20,7 @@ contract VaultLendBase is Test {
     uint256 internal initialDstBalance;
     address internal srcAddress;
     address internal dstAddress;
+    address public user = address(0x1);
     address public user1 = address(0x1);
     address public user2 = address(0x2);
     address public admin = address(0x3);
@@ -33,6 +35,7 @@ contract VaultLendBase is Test {
         rebaseToken = deployed.rebaseToken();
         vault = deployed.vault();
         // fund users with ETH for testing
+        vm.deal(user, FUND_AMOUNT);
         vm.deal(user1, FUND_AMOUNT);
         vm.deal(user2, FUND_AMOUNT);
         vm.deal(userRejector, FUND_AMOUNT);
