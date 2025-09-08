@@ -5,7 +5,6 @@ import "forge-std/Test.sol";
 import "../script/DeployRebaseToken.sol";
 import "../src/Vault.sol";
 import "../src/RebaseToken.sol";
-import "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {RejectEth} from "./mocks/RejectEth.sol";
 
 contract VaultLendBase is Test {

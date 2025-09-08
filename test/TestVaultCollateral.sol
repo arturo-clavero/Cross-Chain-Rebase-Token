@@ -2,18 +2,11 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import "../script/DeployRebaseToken.sol";
 import "../src/Vault.sol";
 import "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
-import {RejectEth} from "./mocks/RejectEth.sol";
 import {PriceFeedMock} from "./mocks/PriceFeedMock.sol";
-import {PriceConverter} from "../src/libs/PriceConverter.sol";
-import {RebaseToken} from "../src/RebaseToken.sol";
 import {VaultLendBase} from "./TestVaultLend.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/interfaces/IERC20.sol";
-import "@openzeppelin/contracts/access/IAccessControl.sol";
 
 contract VaultCollateralBase is Test, VaultLendBase {
     using SafeERC20 for IERC20;
