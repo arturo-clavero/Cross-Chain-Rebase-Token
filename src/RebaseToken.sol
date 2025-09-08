@@ -43,8 +43,10 @@ contract RebaseToken is ERC20, AccessControl {
     /// @notice Burn tokens when ETH is withdrawn
     /// @param account Target address
     /// @param value Amount in ETH units
-    function burn(address account, uint256 value) external onlyRole(BURNER_ROLE) {
-        _burn(account, ethToRaw(value));
+    function burn(address account, uint256 value) external onlyRole(BURNER_ROLE) returns (uint256) {
+        uint256 burned = ethToRaw(value);
+        _burn(account, burned);
+        return burned;
     }
 
     /// @notice Get the current global index

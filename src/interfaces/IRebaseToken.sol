@@ -6,7 +6,7 @@ interface IRebaseToken {
 
     function mint(address account, uint256 value) external;
 
-    function burn(address account, uint256 value) external;
+    function burn(address account, uint256 value) external returns (uint256);
 
     function getGlobalIndex() external view returns (uint256);
 

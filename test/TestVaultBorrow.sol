@@ -6,30 +6,25 @@ import "../src/Vault.sol";
 import "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {VaultCollateralBase} from "./TestVaultCollateral.sol";
 
-// fund users with ETH for testing
-// vm.deal(rebaseTokenIndexManager, FUND_AMOUNT);
-// //grant roles
-// vm.startPrank(admin);
-// borrow.grantRole(borrow.INTEREST_MANAGER_ROLE(), rebaseTokenIndexManager);
-// rebaseToken.grantRole(rebaseToken.INDEX_MANAGER_ROLE(), address(borrow));
-// vm.stopPrank();
-
 contract VaultBorrowBase is Test, VaultCollateralBase {
     using SafeERC20 for IERC20;
 
     uint256 public constant BORROW_AMOUNT = 5e23;
 
-    address public interestManager = address(0x3);
+    address public interestManager = address(0x32);
+    address public rebaseTokenIndexManager = address(0x33);
     uint256 internal initialUserBalance;
     uint256 internal initialTotalLiquidity;
 
     function setUpBorrow() internal {
         // fund users with ETH for testing
         vm.deal(interestManager, FUND_AMOUNT);
+        vm.deal(rebaseTokenIndexManager, FUND_AMOUNT);
 
         //grant permission
         vm.startPrank(admin);
         vault.grantRole(vault.COLLATERAL_INTEREST_MANAGER_ROLE(), interestManager);
+        vault.grantRole(vault.REBASETOKEN_INTEREST_MANAGER_ROLE(), rebaseTokenIndexManager);
         vm.stopPrank();
     }
 
@@ -279,32 +274,32 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
     }
 
     //------- REBASE TOKEN INTEREST RATES -------//
+    function testUpdateRebaseTokenInterest_NotAuthorized() public {
+        vm.startPrank(user);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                user,
+                vault.REBASETOKEN_INTEREST_MANAGER_ROLE()
+            )
+        );
+        vault.updateRebaseTokenInterest();
+        vm.stopPrank();
+    }
+
+    function testUpdateRebaseTokenInterest_NoInterests() public {
+        vm.prank(rebaseTokenIndexManager);
+        vault.updateRebaseTokenInterest();
+
+        uint256 globalIndex = rebaseToken.getGlobalIndex();
+        assertEq(globalIndex, WAD, "Index should remain 1.0 if no interest");
+    }
+
+    function testUpdateRebaseTokenInterest_WithBorrow() public {
+        testFullRepayReturnsCollateralAndRefundsExcess();
+        vm.prank(rebaseTokenIndexManager);
+        vault.updateRebaseTokenInterest();
+        uint256 globalIndex = rebaseToken.getGlobalIndex();
+        assertGt(globalIndex, WAD, "Index should grow with interest");
+    }
 }
-
-// //interest of rebase token:
-//     function testUpdateRebaseTokenInterest_NotAuthorized() public {
-//         vm.startPrank(user);
-//         vm.expectRevert(
-//             abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, borrow.INTEREST_MANAGER_ROLE())
-//         );
-//         borrow.updateRebaseTokenInterest();
-//         vm.stopPrank();
-//     }
-
-//     function testUpdateRebaseTokenInterest_NoInterests() public {
-//         vm.prank(interestManager);
-//         borrow.updateRebaseTokenInterest();
-
-//         uint256 globalIndex = rebaseToken.getGlobalIndex();
-//         assertEq(globalIndex, WAD, "Index should remain 1.0 if no interest");
-//     }
-
-//     function testUpdateRebaseTokenInterest_WithBorrow() public {
-//         testFullRepayReturnsCollateralAndRefundsExcess();
-//         vm.prank(interestManager);
-//         borrow.updateRebaseTokenInterest();
-//         uint256 globalIndex = rebaseToken.getGlobalIndex();
-//         assertGt(globalIndex, WAD, "Index should grow with interest");
-//     }
-
-// }

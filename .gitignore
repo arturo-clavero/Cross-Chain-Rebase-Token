@@ -4,5 +4,6 @@ cache
 out
 coverage.txt
 coveragee.txt
+cov.txt
 lcov.info
 lib

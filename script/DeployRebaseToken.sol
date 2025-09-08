@@ -24,6 +24,7 @@ contract DeployRebaseToken is Script {
         vm.startBroadcast(admin);
         rebaseToken.grantRole(rebaseToken.MINTER_ROLE(), address(vault));
         rebaseToken.grantRole(rebaseToken.BURNER_ROLE(), address(vault));
+        rebaseToken.grantRole(rebaseToken.INDEX_MANAGER_ROLE(), address(vault));
         vm.stopBroadcast();
     }
 }

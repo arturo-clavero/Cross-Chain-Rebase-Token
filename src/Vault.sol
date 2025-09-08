@@ -106,10 +106,9 @@ contract Vault is ReentrancyGuard, AccessControl {
         }
         if (totalLiquidity < amount) revert Vault__insufficientLiquidity();
 
-        totalShares -= amount;
         totalLiquidity -= amount;
 
-        i_rebaseToken.burn(msg.sender, amount);
+        totalShares -= i_rebaseToken.burn(msg.sender, amount);
         (bool success,) = msg.sender.call{value: amount}("");
         if (!success) revert Vault__transferFailed();
     }
@@ -117,7 +116,7 @@ contract Vault is ReentrancyGuard, AccessControl {
     /// @notice Deposit token as collateral to borrow ETH
     /// @param amountToDeposit Amount of collateral to deposit
     /// @param token Address of the collateral token
-    function depositCollateral(uint256 amountToDeposit, address token) public {
+    function depositCollateral(uint256 amountToDeposit, address token) public nonReentrant {
         if (amountToDeposit == 0) revert Borrow__invalidAmount();
         if (collateralPerToken[token].priceFeed == address(0)) revert Borrow__collateralTokenNotSupported(token);
         if (IERC20(token).allowance(msg.sender, address(this)) < amountToDeposit) {
@@ -212,39 +211,45 @@ contract Vault is ReentrancyGuard, AccessControl {
         if (debtPerTokenPerUser[msg.sender][token].debt == 0) revert Borrow__noDebtForCollateral(token);
 
         uint256 refund;
-        uint256 userScaled = debtPerTokenPerUser[msg.sender][token].debt;
-        uint256 realDebt = userScaled * globalIndex / WAD;
-        uint256 payETH = msg.value;
+        uint256 principalDebt = debtPerTokenPerUser[msg.sender][token].debt;
+        uint256 accruedDebt = principalDebt * globalIndex / WAD;
+        //amount the user has paid back
+        uint256 repaid = msg.value;
 
-        if (payETH > realDebt) {
-            refund = payETH - realDebt;
-            payETH = realDebt;
+        //if the user pays back more than he owes, mark how much to refund
+        if (repaid > accruedDebt) {
+            refund = repaid - accruedDebt;
+            repaid = accruedDebt;
         }
 
-        uint256 scaledRepaid = payETH * WAD / globalIndex;
+        //"original debt" (without interest), the user is repaying
+        uint256 scaledRepaid = repaid * WAD / globalIndex;
+        //total locked collateral
         uint256 userCollat = debtPerTokenPerUser[msg.sender][token].usedCollateral;
-        uint256 returnedCollateral;
+        //collateral to return to user in exchange for paying back
+        uint256 returnCollateral;
 
-        if (scaledRepaid >= userScaled) {
-            returnedCollateral = userCollat;
-            scaledRepaid = userScaled;
+        //if user has paid all his debt, all his collateral is returned
+        if (scaledRepaid >= principalDebt) {
+            returnCollateral = userCollat;
+            scaledRepaid = principalDebt;
         } else {
-            returnedCollateral = userCollat * scaledRepaid / userScaled;
+            returnCollateral = userCollat * scaledRepaid / principalDebt;
         }
 
-        debtPerTokenPerUser[msg.sender][token].debt = userScaled - scaledRepaid;
-        debtPerTokenPerUser[msg.sender][token].usedCollateral = userCollat - returnedCollateral;
+        debtPerTokenPerUser[msg.sender][token].debt = principalDebt - scaledRepaid;
+        debtPerTokenPerUser[msg.sender][token].usedCollateral = userCollat - returnCollateral;
 
-        uint256 interest = payETH - scaledRepaid;
-        totalInterests += interest;
+        totalInterests += repaid - scaledRepaid;
+        totalLiquidity += repaid;
 
-        IERC20(token).safeTransfer(msg.sender, returnedCollateral);
+        IERC20(token).safeTransfer(msg.sender, returnCollateral);
         if (refund != 0) {
             (bool success,) = payable(msg.sender).call{value: refund}("");
             if (!success) revert Borrow__invalidTransfer();
         }
 
-        emit userRepaidEth(msg.sender, token, payETH, returnedCollateral);
+        emit userRepaidEth(msg.sender, token, repaid, returnCollateral);
     }
 
     /// @notice Accrue interest on all debts by updating global index
@@ -323,10 +328,10 @@ contract Vault is ReentrancyGuard, AccessControl {
     // /// @notice Update the rebase tokens interest based on total deposits and total interests
     // /// function should be called periodically and this contracts address needs to be granted role
     // /// to access the rebase token function of INDEX_MANAGER_ROLE by the rebasetoken contract
-    // function updateRebaseTokenInterest() external onlyRole(REBASETOKEN_INTEREST_MANAGER_ROLE) {
-    //     uint256 interest = WAD * (totalDeposits + totalInterests) / totalDeposits;
-    //     i_rebaseToken.updateGlobalIndex(interest);
-    // }
+    function updateRebaseTokenInterest() external onlyRole(REBASETOKEN_INTEREST_MANAGER_ROLE) {
+        uint256 interest = WAD * (totalShares + totalInterests) / totalShares;
+        i_rebaseToken.updateGlobalIndex(interest);
+    }
 
     //GETTERS:
 

@@ -1,0 +1,48 @@
+1 RATE
+0 SHARES
+0 INTEREST
+0 LIQUIDITY
+
+>> DEPOSIT 5
+1 RATE
+5 SHARES
+0 INTEREST
+5 LIQUIDITY
+
+
+>> BORROW 3
+1 RATE
+5 SHARES
+0 INTEREST
+2 LIQUIDITY
+
+>> REPAY 4
+1 RATE
+5 SHARES
+1 INTEREST
+6 LIQUIDITY
+
+
+>> WITHDRAW 1 >> x RATE = 1;
+1 RATE
+4 SHARES
+1 INTEREST
+5 LIQUIDITY
+
+>> UPDATE RATE >> SHARES + INTEREST / SHARES = 5/4 = 1.25
+1.25 RATE                           1.25 RATE
+4    SHARES                         4    SHARES
+1    INTEREST                       0    INTEREST
+5    LIQUIDITY                      5    LIQUIDITY
+
+>> WITHDRAW 1 >> x RATE = 1.25;     >> WITHDRAW 1 >> x RATE = 1.25;
+1.25 RATE                           1.25 RATE
+3    SHARES                         3    SHARES
+1    INTEREST                       1    INTEREST
+4    LIQUIDITY                      4    LIQUIDITY
+
+
+
+
+
+
