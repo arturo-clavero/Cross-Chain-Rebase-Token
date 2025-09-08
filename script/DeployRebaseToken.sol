@@ -2,8 +2,8 @@
 pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
-import {RebaseToken} from "../code/RebaseToken.sol";
-import {Vault} from "../code/Vault.sol";
+import {RebaseToken} from "../src/RebaseToken.sol";
+import {Vault} from "../src/Vault.sol";
 
 contract DeployRebaseToken is Script {
     error DeployRebaseToken__mustCallRunRebaseTokenFirst();

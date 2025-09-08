@@ -2,12 +2,12 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import "../code/RebaseToken.sol";
+import "../src/RebaseToken.sol";
 import "../script/DeployRebaseToken.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract RebaseTokenTest is Test {
+contract TestRebaseToken is Test {
     RebaseToken private token;
 
     address admin = address(0xA);
