@@ -15,7 +15,7 @@ contract VaultBorrowBase is Test, VaultCollateralBase {
     address public rebaseTokenIndexManager = address(0x33);
     uint256 internal initialUserBalance;
     uint256 internal initialTotalLiquidity;
-    uint256 internal initialUsedCollateral;
+    uint256 internal initiallockedCollateral;
     uint256 internal initialDebt;
 
     function setUpBorrow() internal {
@@ -71,7 +71,7 @@ contract VaultBorrowBase is Test, VaultCollateralBase {
         srcAddress = _user;
         initialTotalLiquidity = vault.getTotalLiquidity();
         (initialDebt,,) = vault.debtPerTokenPerUser(_user, address(collateralToken));
-        (, initialUsedCollateral,) = vault.debtPerTokenPerUser(_user, address(collateralToken));
+        (, initiallockedCollateral,) = vault.debtPerTokenPerUser(_user, address(collateralToken));
         initialUserBalance = _user.balance;
         initialDstBalance = collateralToken.balanceOf(_user);
     }
@@ -90,21 +90,21 @@ contract VaultBorrowBase is Test, VaultCollateralBase {
 
         assertEq(initialTotalLiquidity + scaledDebtPaid, vault.getTotalLiquidity(), "liquidity increases by debt paid");
         (uint256 finalDebt,,) = vault.debtPerTokenPerUser(srcAddress, address(collateralToken));
-        (, uint256 finalUsedCollateral,) = vault.debtPerTokenPerUser(srcAddress, address(collateralToken));
+        (, uint256 finallockedCollateral,) = vault.debtPerTokenPerUser(srcAddress, address(collateralToken));
         if (scaledDebtLeft == 0) {
             assertEq(finalDebt, 0, "all is paid, final debt is 0");
-            assertEq(finalUsedCollateral, 0, "all is paid final used colalteral is 0");
+            assertEq(finallockedCollateral, 0, "all is paid final used colalteral is 0");
             if (overpayment > 0) {
                 assertLt(initialUserBalance - amount, srcAddress.balance, "should be returned overpayment");
             }
         } else {
             assertLt(finalDebt, initialDebt, "partial payment, debt decreases");
-            assertLt(finalUsedCollateral, initialUsedCollateral, "partial payment, collateral used decreases");
+            assertLt(finallockedCollateral, initiallockedCollateral, "partial payment, collateral used decreases");
         }
         assertEq(initialUserBalance - amount + overpayment, srcAddress.balance, "user balance decreases");
         assertEq(
             collateralToken.balanceOf(srcAddress),
-            initialDstBalance + initialUsedCollateral - finalUsedCollateral,
+            initialDstBalance + initiallockedCollateral - finallockedCollateral,
             "collateral balance increases"
         );
     }

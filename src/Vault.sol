@@ -13,11 +13,11 @@ import {PriceConverter} from "./libs/PriceConverter.sol";
 
 /// @notice Struct for borrowing data associated per user, per collateral token address
 /// @param debt Amount of debt the user owes associated with specific token includes
-/// @param usedCollateral Amount of collateral locked for user's borrowed ETH that has not yet been repaid
+/// @param lockedCollateral Amount of collateral locked for user's borrowed ETH that has not yet been repaid
 /// @param availableCollateral Amount of collateral user has deposited and can be used to borrow ETH
 struct Debt {
     uint256 debt;
-    uint256 usedCollateral;
+    uint256 lockedCollateral;
     uint256 availableCollateral;
 }
 
@@ -59,7 +59,6 @@ contract Vault is ReentrancyGuard, AccessControl {
 
     uint256 private totalLiquidity; //REAL ETH -> unchanged by globalIndex
     uint256 private totalBorrowScaled; //SCALED ETH -> dependes on globalIndex
-    // uint256 private totalInterests;
     uint256 private borrowDebtIndex;
 
     IRebaseToken private immutable i_rebaseToken;
@@ -88,16 +87,6 @@ contract Vault is ReentrancyGuard, AccessControl {
         depositTo(msg.sender);
     }
 
-    /// @notice Deposit ETH on behalf of an account
-    /// @param account Address to receive minted rebase tokens
-    function depositTo(address account) public payable {
-        if (msg.value == 0) revert Vault__insufficientAmount();
-
-        totalLiquidity += msg.value;
-
-        i_rebaseToken.mint(account, msg.value);
-    }
-
     /// @notice Withdraw ETH by burning rebase tokens
     /// @param amount Amount of ETH to withdraw
     /// if amount is max uint we will take the total of the users balance
@@ -115,25 +104,11 @@ contract Vault is ReentrancyGuard, AccessControl {
         if (!success) revert Vault__transferFailed();
     }
 
-    /// @notice Deposit token as collateral to borrow ETH
-    /// @param amountToDeposit Amount of collateral to deposit
-    /// @param token Address of the collateral token
-    function depositCollateral(uint256 amountToDeposit, address token) public nonReentrant {
-        if (amountToDeposit == 0) revert Borrow__invalidAmount();
-        if (collateralPerToken[token].priceFeed == address(0)) revert Borrow__collateralTokenNotSupported(token);
-        if (IERC20(token).allowance(msg.sender, address(this)) < amountToDeposit) {
-            revert Borrow__insufficientAllowance();
-        }
-
-        debtPerTokenPerUser[msg.sender][token].availableCollateral += amountToDeposit;
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amountToDeposit);
-    }
-
     /// @notice Borrow ETH using available deposited collateral
     /// @param amountToBorrow Amount of ETH to borrow
     /// @param token Address of the collateral token
     /// @param takeMaxAvailable Bool to take max ETH borrowable if not enough collateral
-    function borrow(uint256 amountToBorrow, address token, bool takeMaxAvailable) public nonReentrant {
+    function borrow(uint256 amountToBorrow, address token, bool takeMaxAvailable) external nonReentrant {
         if (amountToBorrow == 0) {
             revert Borrow__invalidAmount();
         }
@@ -160,33 +135,11 @@ contract Vault is ReentrancyGuard, AccessControl {
         totalBorrowScaled += scaledEth;
         debtPerTokenPerUser[msg.sender][token].debt += scaledEth;
         debtPerTokenPerUser[msg.sender][token].availableCollateral -= lockedCollateral;
-        debtPerTokenPerUser[msg.sender][token].usedCollateral += lockedCollateral;
+        debtPerTokenPerUser[msg.sender][token].lockedCollateral += lockedCollateral;
 
         (bool success,) = payable(msg.sender).call{value: amountToBorrow}("");
         if (!success) revert Borrow__invalidTransfer();
         emit UserBorrowedEth(msg.sender, token, amountToBorrow, amountToBorrow);
-    }
-
-    /// @notice Get the amount of collateral needed to borrow ETH
-    /// @param token Address of collateral token
-    /// @param amountToBorrow Amount of ETH user wants to borrow
-    function collateralToBorrow(address token, uint256 amountToBorrow) internal view returns (uint256) {
-        if (amountToBorrow == type(uint256).max) {
-            return amountToBorrow;
-        }
-        uint256 ETHforSingleCollateral = maxEthFrom(token, WAD);
-        return ETHforSingleCollateral * amountToBorrow / WAD;
-    }
-
-    /// @notice Compute max ETH borrowable from a given collateral amount
-    /// @param token Collateral token address
-    /// @param amount Amount of collateral
-    /// @return amountInEth Maximum ETH that can be borrowed
-    function maxEthFrom(address token, uint256 amount) internal view returns (uint256) {
-        Collateral memory collateral = collateralPerToken[token];
-        if (collateral.priceFeed == address(0)) revert Borrow__collateralTokenNotSupported(token);
-        uint256 amountInEth = PriceConverter.getRates(amount, collateral.priceFeed);
-        return amountInEth * WAD / collateral.LVM;
     }
 
     /// @notice Deposit specific collateral amount and borrow as much ETH as possible
@@ -213,10 +166,12 @@ contract Vault is ReentrancyGuard, AccessControl {
     /// @param token Collateral token to repay against
     function repay(address token) external payable nonReentrant {
         if (msg.value == 0) revert Borrow__invalidAmount();
-        if (debtPerTokenPerUser[msg.sender][token].debt == 0) revert Borrow__noDebtForCollateral(token);
+
+        Debt storage userDebt = debtPerTokenPerUser[msg.sender][_token];
+        if (userDebt.debt == 0) revert Borrow__noDebtForCollateral(token);
 
         uint256 refund;
-        uint256 principalDebt = debtPerTokenPerUser[msg.sender][token].debt;
+        uint256 principalDebt = userDebt.debt;
         uint256 accruedDebt = principalDebt * borrowDebtIndex / WAD;
         //amount the user has paid back
         uint256 repaid = msg.value;
@@ -230,7 +185,7 @@ contract Vault is ReentrancyGuard, AccessControl {
         //"original debt" (without interest), the user is repaying
         uint256 scaledRepaid = repaid * WAD / borrowDebtIndex;
         //total locked collateral
-        uint256 userCollat = debtPerTokenPerUser[msg.sender][token].usedCollateral;
+        uint256 userCollat = userDebt.lockedCollateral;
         //collateral to return to user in exchange for paying back
         uint256 returnCollateral;
 
@@ -242,10 +197,9 @@ contract Vault is ReentrancyGuard, AccessControl {
             returnCollateral = userCollat * scaledRepaid / principalDebt;
         }
 
-        debtPerTokenPerUser[msg.sender][token].debt = principalDebt - scaledRepaid;
-        debtPerTokenPerUser[msg.sender][token].usedCollateral = userCollat - returnCollateral;
+        userDebt.debt = principalDebt - scaledRepaid;
+        userDebt.lockedCollateral = userCollat - returnCollateral;
 
-        // totalInterests += repaid - scaledRepaid;
         totalBorrowScaled -= scaledRepaid;
         totalLiquidity += repaid;
 
@@ -304,41 +258,39 @@ contract Vault is ReentrancyGuard, AccessControl {
     ///      Collateral is seized proportionally to the ETH paid
     /// @param user The address of the user being liquidated
     /// @param _token The collateral token used by the user
-    function liquidate(address user, address _token) external payable onlyRole(LIQUIDATOR_ROLE) {
+    function liquidate(address user, address _token) external payable nonReentrant onlyRole(LIQUIDATOR_ROLE) {
         Debt storage userDebt = debtPerTokenPerUser[user][_token];
-        // Collateral memory collateral = collateralPerToken[_token];
 
-        uint256 realDebt = userDebt.debt * borrowDebtIndex / WAD;
-        uint256 maxBorrow = maxEthFrom(_token, userDebt.usedCollateral);
+        uint256 accruedDebt = userDebt.debt * borrowDebtIndex / WAD;
+        uint256 maxDebtCovered = maxEthFrom(_token, userDebt.lockedCollateral);
 
-        if (realDebt <= maxBorrow) revert Borrow__userNotUnderCollaterlized();
+        if (accruedDebt < maxDebtCovered) revert Borrow__userNotUnderCollaterlized();
         if (msg.value == 0) revert Borrow__invalidAmount();
 
-        uint256 payETH = msg.value;
-        if (payETH > realDebt) {
-            payETH = realDebt; // cap at total debt
+        uint256 refund;
+        uint256 repaid = msg.value;
+        if (repaid > accruedDebt) {
+            refund = repaid - accruedDebt;
+            repaid = accruedDebt; // cap at total debt
         }
 
-        uint256 seizedCollateral = userDebt.usedCollateral * payETH / realDebt;
-        uint256 scaledPaid = payETH * WAD / borrowDebtIndex;
+        uint256 seizedCollateral = userDebt.lockedCollateral * repaid / accruedDebt;
+        uint256 scaledPaid = repaid * WAD / borrowDebtIndex;
         userDebt.debt -= scaledPaid;
-        userDebt.usedCollateral -= seizedCollateral;
+        userDebt.lockedCollateral -= seizedCollateral;
 
-        totalLiquidity += payETH;
+        totalLiquidity += repaid;
 
         IERC20(_token).safeTransfer(msg.sender, seizedCollateral);
-
-        if (msg.value > payETH) {
-            (bool success,) = payable(msg.sender).call{value: msg.value - payETH}("");
-            if (!success) {
-                revert Borrow__invalidTransfer();
-            }
+        if (refund != 0) {
+            (bool success,) = payable(msg.sender).call{value: refund}("");
+            if (!success) revert Borrow__invalidTransfer();
         }
     }
 
-    // /// @notice Update the rebase tokens interest based on total deposits and total interests
-    // /// function should be called periodically and this contracts address needs to be granted role
-    // /// to access the rebase token function of INDEX_MANAGER_ROLE by the rebasetoken contract
+    /// @notice Update the rebase tokens interest based on total deposits and total interests
+    /// function should be called periodically and this contracts address needs to be granted role
+    /// to access the rebase token function of INDEX_MANAGER_ROLE by the rebasetoken contract
     function updateRebaseTokenInterest() external onlyRole(REBASETOKEN_INTEREST_MANAGER_ROLE) {
         uint256 rawSupply = i_rebaseToken.totalSupply();
         if (rawSupply == 0) return;
@@ -359,7 +311,31 @@ contract Vault is ReentrancyGuard, AccessControl {
         return totalLiquidity;
     }
 
-    /// @notice Internal helper to add or modify collateral parameters
+    /// @notice Deposit ETH on behalf of an account
+    /// @param account Address to receive minted rebase tokens
+    function depositTo(address account) public payable {
+        if (msg.value == 0) revert Vault__insufficientAmount();
+
+        totalLiquidity += msg.value;
+
+        i_rebaseToken.mint(account, msg.value);
+    }
+
+    /// @notice Deposit token as collateral to borrow ETH
+    /// @param amountToDeposit Amount of collateral to deposit
+    /// @param token Address of the collateral token
+    function depositCollateral(uint256 amountToDeposit, address token) public nonReentrant {
+        if (amountToDeposit == 0) revert Borrow__invalidAmount();
+        if (collateralPerToken[token].priceFeed == address(0)) revert Borrow__collateralTokenNotSupported(token);
+        if (IERC20(token).allowance(msg.sender, address(this)) < amountToDeposit) {
+            revert Borrow__insufficientAllowance();
+        }
+
+        debtPerTokenPerUser[msg.sender][token].availableCollateral += amountToDeposit;
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amountToDeposit);
+    }
+
+    /// @notice helper to add or modify collateral parameters
     function modifyCollateral(address _token, address _priceFeed, uint256 _LVM)
         public
         onlyRole(COLLATERAL_MANAGER_ROLE)
@@ -368,5 +344,27 @@ contract Vault is ReentrancyGuard, AccessControl {
             revert Borrow__invalidCollateralParams();
         }
         collateralPerToken[_token] = Collateral({priceFeed: _priceFeed, LVM: _LVM});
+    }
+
+    /// @notice Get the amount of collateral needed to borrow ETH
+    /// @param token Address of collateral token
+    /// @param amountToBorrow Amount of ETH user wants to borrow
+    function collateralToBorrow(address token, uint256 amountToBorrow) internal view returns (uint256) {
+        if (amountToBorrow == type(uint256).max) {
+            return amountToBorrow;
+        }
+        uint256 ETHforSingleCollateral = maxEthFrom(token, WAD);
+        return ETHforSingleCollateral * amountToBorrow / WAD;
+    }
+
+    /// @notice Compute max ETH borrowable from a given collateral amount
+    /// @param token Collateral token address
+    /// @param amount Amount of collateral
+    /// @return amountInEth Maximum ETH that can be borrowed
+    function maxEthFrom(address token, uint256 amount) internal view returns (uint256) {
+        Collateral memory collateral = collateralPerToken[token];
+        if (collateral.priceFeed == address(0)) revert Borrow__collateralTokenNotSupported(token);
+        uint256 amountInEth = PriceConverter.getRates(amount, collateral.priceFeed);
+        return amountInEth * WAD / collateral.LVM;
     }
 }

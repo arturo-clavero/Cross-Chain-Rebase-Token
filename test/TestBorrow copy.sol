@@ -47,7 +47,7 @@
 //         //grant roles
 //         vm.startPrank(admin);
 //         borrow.grantRole(borrow.INTEREST_MANAGER_ROLE(), interestManager);
-//         borrow.grantRole(borrow.usedCollateral_MANAGER_ROLE(), collateralManager);
+//         borrow.grantRole(borrow.lockedCollateral_MANAGER_ROLE(), collateralManager);
 //         borrow.grantRole(borrow.LIQUIDATOR_ROLE(), liquidator);
 //         rebaseToken.grantRole(rebaseToken.INDEX_MANAGER_ROLE(), address(borrow));
 //         vm.stopPrank();
