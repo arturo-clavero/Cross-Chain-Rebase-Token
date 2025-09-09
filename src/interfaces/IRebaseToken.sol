@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-interface IRebaseToken {
+import "@openzeppelin/contracts/interfaces/IERC20.sol";
+
+interface IRebaseToken is IERC20 {
     function updateGlobalIndex(uint256 newValue) external;
 
     function mint(address account, uint256 value) external;

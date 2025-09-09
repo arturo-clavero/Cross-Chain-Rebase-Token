@@ -15,6 +15,8 @@ contract VaultBorrowBase is Test, VaultCollateralBase {
     address public rebaseTokenIndexManager = address(0x33);
     uint256 internal initialUserBalance;
     uint256 internal initialTotalLiquidity;
+    uint256 internal initialUsedCollateral;
+    uint256 internal initialDebt;
 
     function setUpBorrow() internal {
         // fund users with ETH for testing
@@ -28,27 +30,31 @@ contract VaultBorrowBase is Test, VaultCollateralBase {
         vm.stopPrank();
     }
 
-    // ---------- BORROW ----------
+    // ---------- BORROW ---------- //
     function preCheckBorrow(address _user) internal {
         srcAddress = _user;
         initialUserBalance = _user.balance;
         initialTotalLiquidity = vault.getTotalLiquidity();
         (,, initialSrcBalance) = vault.debtPerTokenPerUser(_user, address(collateralToken));
         (, initialDstBalance,) = vault.debtPerTokenPerUser(_user, address(collateralToken));
+        (initialDebt,,) = vault.debtPerTokenPerUser(srcAddress, address(collateralToken));
     }
 
-    function checkBorrow(uint256 amount) internal {
+    function checkBorrow(uint256 amount) internal view {
         console.log(amount);
-        assertEq(initialUserBalance + amount, srcAddress.balance);
-        assertEq(initialTotalLiquidity - amount, vault.getTotalLiquidity());
+        assertEq(initialUserBalance + amount, srcAddress.balance, "user balance increased");
+        assertEq(initialTotalLiquidity - amount, vault.getTotalLiquidity(), "total liquidity decreased");
         (,, uint256 srcBalance) = vault.debtPerTokenPerUser(srcAddress, address(collateralToken));
         (, uint256 dstBalance,) = vault.debtPerTokenPerUser(srcAddress, address(collateralToken));
+        (uint256 debt,,) = vault.debtPerTokenPerUser(srcAddress, address(collateralToken));
         if (amount == 0) {
-            assertEq(initialSrcBalance, srcBalance);
-            assertEq(initialDstBalance, dstBalance);
+            assertEq(initialSrcBalance, srcBalance, "0 borrow amount, no change in available collateral");
+            assertEq(initialDstBalance, dstBalance, "0 borrow amount, no change in used collateral");
+            assertEq(initialDebt, debt, "0 borrow amount, no change in debt balance");
         } else {
-            assertGt(initialSrcBalance, srcBalance);
-            assertGt(dstBalance, initialDstBalance);
+            assertLt(srcBalance, initialSrcBalance, "available collateral should decrease");
+            assertGt(dstBalance, initialDstBalance, "used collateral should increase");
+            assertGt(debt, initialDebt, "debt should increase");
         }
     }
 
@@ -58,6 +64,49 @@ contract VaultBorrowBase is Test, VaultCollateralBase {
         }
         vm.prank(_user);
         vault.borrow(amount, address(collateralToken), false);
+    }
+
+    // ---------- REPAY ---------- //
+    function preCheckRepay(address _user) internal {
+        srcAddress = _user;
+        initialTotalLiquidity = vault.getTotalLiquidity();
+        (initialDebt,,) = vault.debtPerTokenPerUser(_user, address(collateralToken));
+        (, initialUsedCollateral,) = vault.debtPerTokenPerUser(_user, address(collateralToken));
+        initialUserBalance = _user.balance;
+        initialDstBalance = collateralToken.balanceOf(_user);
+    }
+
+    function checkRepay(uint256 amount) internal view {
+        uint256 debtIndex = vault.getGlobalIndex();
+        uint256 scaledDebt = initialDebt * debtIndex / WAD;
+        uint256 overpayment;
+        uint256 scaledDebtLeft;
+        if (amount >= scaledDebt) {
+            overpayment = amount - scaledDebt;
+        } else {
+            scaledDebtLeft = scaledDebt - amount;
+        }
+        uint256 scaledDebtPaid = overpayment > 0 ? scaledDebt : amount;
+
+        assertEq(initialTotalLiquidity + scaledDebtPaid, vault.getTotalLiquidity(), "liquidity increases by debt paid");
+        (uint256 finalDebt,,) = vault.debtPerTokenPerUser(srcAddress, address(collateralToken));
+        (, uint256 finalUsedCollateral,) = vault.debtPerTokenPerUser(srcAddress, address(collateralToken));
+        if (scaledDebtLeft == 0) {
+            assertEq(finalDebt, 0, "all is paid, final debt is 0");
+            assertEq(finalUsedCollateral, 0, "all is paid final used colalteral is 0");
+            if (overpayment > 0) {
+                assertLt(initialUserBalance - amount, srcAddress.balance, "should be returned overpayment");
+            }
+        } else {
+            assertLt(finalDebt, initialDebt, "partial payment, debt decreases");
+            assertLt(finalUsedCollateral, initialUsedCollateral, "partial payment, collateral used decreases");
+        }
+        assertEq(initialUserBalance - amount + overpayment, srcAddress.balance, "user balance decreases");
+        assertEq(
+            collateralToken.balanceOf(srcAddress),
+            initialDstBalance + initialUsedCollateral - finalUsedCollateral,
+            "collateral balance increases"
+        );
     }
 }
 
@@ -69,18 +118,20 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
     }
     //------- BORROW TESTS -------//
 
-    function testBorrowOk() public {
-        depositCollateral(user, BORROW_AMOUNT, false);
+    function testBorrowOk(uint256 amountToBorrow) public {
+        vm.assume(amountToBorrow > 0);
+        vm.assume(amountToBorrow <= vault.getTotalLiquidity());
+        depositCollateral(user, amountToBorrow, true);
         preCheckBorrow(user);
-        borrow(user, BORROW_AMOUNT, true);
-        checkBorrow(BORROW_AMOUNT);
+        borrow(user, amountToBorrow, false);
+        checkBorrow(amountToBorrow);
     }
 
     function testBorrowEvent() public {
         depositCollateral(user, COLLATERAL_TOKEN_FUND_AMOUNT, false);
         vm.prank(user);
         vm.expectEmit(true, true, false, true, address(vault));
-        emit Vault.userBorrowedEth(user, address(collateralToken), BORROW_AMOUNT, BORROW_AMOUNT);
+        emit Vault.UserBorrowedEth(user, address(collateralToken), BORROW_AMOUNT, BORROW_AMOUNT);
         vault.borrow(BORROW_AMOUNT, address(collateralToken), true);
     }
 
@@ -245,6 +296,21 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
         vm.stopPrank();
     }
 
+    function testRepayOk(uint256 amountToBorrow, uint256 amountToRepay) public {
+        uint256 totalLiquidity = vault.getTotalLiquidity();
+        vm.assume(amountToBorrow > 0);
+        vm.assume(amountToBorrow <= totalLiquidity);
+        vm.assume(amountToRepay > 0);
+        vm.assume(amountToRepay <= totalLiquidity * 10);
+        uint256 extraBalanceForRepayment = amountToRepay > amountToBorrow ? amountToRepay - amountToBorrow : 0;
+        vm.deal(user, extraBalanceForRepayment);
+        borrow(user, amountToBorrow, true);
+        preCheckRepay(user);
+        vm.prank(user);
+        vault.repay{value: amountToRepay}(address(collateralToken));
+        checkRepay(amountToRepay);
+    }
+
     // ---------- INTEREST TESTS ----------
     function testAccrueInterestOnlyRole() public {
         vm.startPrank(interestManager);
@@ -256,20 +322,6 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
         vm.startPrank(user);
         vm.expectRevert();
         vault.accrueInterest(1e17);
-        vm.stopPrank();
-    }
-
-    function testTotalInterestsUpdatedAfterRepay() public {
-        borrow(user, 1e18, true);
-
-        vm.prank(interestManager);
-        vault.accrueInterest(1e17); // 10%
-
-        vm.startPrank(user);
-        uint256 totalBefore = vault.getTotalInterests();
-        vault.repay{value: 1 ether}(address(collateralToken));
-        uint256 totalAfter = vault.getTotalInterests();
-        assertGt(totalAfter, totalBefore);
         vm.stopPrank();
     }
 

@@ -8,6 +8,9 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {PriceConverter} from "./libs/PriceConverter.sol";
 
+// Consider renaming globalIndex → borrowIndex or debtIndex
+//to avoid confusion with the rebase token's own index.
+
 /// @notice Struct for borrowing data associated per user, per collateral token address
 /// @param debt Amount of debt the user owes associated with specific token includes
 /// @param usedCollateral Amount of collateral locked for user's borrowed ETH that has not yet been repaid
@@ -54,9 +57,9 @@ contract Vault is ReentrancyGuard, AccessControl {
     bytes32 public constant COLLATERAL_MANAGER_ROLE = keccak256("COLLATERAL_MANAGER_ROLE");
     bytes32 public constant LIQUIDATOR_ROLE = keccak256("LIQUIDATOR_ROLE");
 
-    uint256 private totalShares;
-    uint256 private totalLiquidity;
-    uint256 private totalInterests;
+    uint256 private totalLiquidity; //REAL ETH -> unchanged by globalIndex
+    uint256 private totalBorrowScaled; //SCALED ETH -> dependes on globalIndex
+    // uint256 private totalInterests;
     uint256 private globalIndex;
 
     IRebaseToken private immutable i_rebaseToken;
@@ -65,9 +68,9 @@ contract Vault is ReentrancyGuard, AccessControl {
     mapping(address => mapping(address => Debt)) public debtPerTokenPerUser;
 
     /// @notice Emitted when a user borrows ETH
-    event userBorrowedEth(address indexed user, address indexed token, uint256 amount, uint256 borrowedEth);
+    event UserBorrowedEth(address indexed user, address indexed token, uint256 amount, uint256 borrowedEth);
     /// @notice Emitted when a user repays ETH
-    event userRepaidEth(address indexed user, address indexed token, uint256 repaidAmount, uint256 returnedCollateral);
+    event UserRepaidEth(address indexed user, address indexed token, uint256 repaidAmount, uint256 returnedCollateral);
 
     /// @param _rebaseToken The token used to represent deposits
     /// @param admin Admin account to manage roles
@@ -90,7 +93,6 @@ contract Vault is ReentrancyGuard, AccessControl {
     function depositTo(address account) public payable {
         if (msg.value == 0) revert Vault__insufficientAmount();
 
-        totalShares += msg.value;
         totalLiquidity += msg.value;
 
         i_rebaseToken.mint(account, msg.value);
@@ -108,7 +110,7 @@ contract Vault is ReentrancyGuard, AccessControl {
 
         totalLiquidity -= amount;
 
-        totalShares -= i_rebaseToken.burn(msg.sender, amount);
+        i_rebaseToken.burn(msg.sender, amount);
         (bool success,) = msg.sender.call{value: amount}("");
         if (!success) revert Vault__transferFailed();
     }
@@ -155,13 +157,14 @@ contract Vault is ReentrancyGuard, AccessControl {
 
         totalLiquidity -= amountToBorrow;
         uint256 scaledEth = amountToBorrow * WAD / globalIndex;
+        totalBorrowScaled += scaledEth;
         debtPerTokenPerUser[msg.sender][token].debt += scaledEth;
-        debtPerTokenPerUser[msg.sender][token].availableCollateral -= availableCollateral;
+        debtPerTokenPerUser[msg.sender][token].availableCollateral -= lockedCollateral;
         debtPerTokenPerUser[msg.sender][token].usedCollateral += lockedCollateral;
 
         (bool success,) = payable(msg.sender).call{value: amountToBorrow}("");
         if (!success) revert Borrow__invalidTransfer();
-        emit userBorrowedEth(msg.sender, token, amountToBorrow, amountToBorrow);
+        emit UserBorrowedEth(msg.sender, token, amountToBorrow, amountToBorrow);
     }
 
     /// @notice Get the amount of collateral needed to borrow ETH
@@ -198,9 +201,11 @@ contract Vault is ReentrancyGuard, AccessControl {
     /// @param amountToBorrow Amount of ETH to borrow
     /// @param token Address of the collateral token
     function depositCollateralMaxAndBorrowAmount(uint256 amountToBorrow, address token) external {
-        uint256 necessaryCollateral = maxEthFrom(token, amountToBorrow);
-        necessaryCollateral -= debtPerTokenPerUser[msg.sender][token].availableCollateral;
-        depositCollateral(necessaryCollateral, token);
+        uint256 necessaryCollateral = collateralToBorrow(token, amountToBorrow);
+        uint256 availableCollateral = debtPerTokenPerUser[msg.sender][token].availableCollateral;
+        if (availableCollateral < necessaryCollateral) {
+            depositCollateral(necessaryCollateral - availableCollateral, token);
+        }
         borrow(type(uint256).max, token, true);
     }
 
@@ -230,7 +235,7 @@ contract Vault is ReentrancyGuard, AccessControl {
         uint256 returnCollateral;
 
         //if user has paid all his debt, all his collateral is returned
-        if (scaledRepaid >= principalDebt) {
+        if (scaledRepaid > principalDebt) {
             returnCollateral = userCollat;
             scaledRepaid = principalDebt;
         } else {
@@ -240,7 +245,8 @@ contract Vault is ReentrancyGuard, AccessControl {
         debtPerTokenPerUser[msg.sender][token].debt = principalDebt - scaledRepaid;
         debtPerTokenPerUser[msg.sender][token].usedCollateral = userCollat - returnCollateral;
 
-        totalInterests += repaid - scaledRepaid;
+        // totalInterests += repaid - scaledRepaid;
+        totalBorrowScaled -= scaledRepaid;
         totalLiquidity += repaid;
 
         IERC20(token).safeTransfer(msg.sender, returnCollateral);
@@ -249,12 +255,17 @@ contract Vault is ReentrancyGuard, AccessControl {
             if (!success) revert Borrow__invalidTransfer();
         }
 
-        emit userRepaidEth(msg.sender, token, repaid, returnCollateral);
+        emit UserRepaidEth(msg.sender, token, repaid, returnCollateral);
     }
 
     /// @notice Accrue interest on all debts by updating global index
     /// @param rate Interest rate to apply (in WAD units, e.g., 1e16 = 1%)
     function accrueInterest(uint256 rate) external onlyRole(COLLATERAL_INTEREST_MANAGER_ROLE) {
+        //calculate inflation
+        // uint256 totalBorrows = totalBorrowScaled * globalIndex / WAD;
+        // uint256 inflation = totalBorrows * WAD / totalLiquidity + totalBorrows;
+        // if (inflation > maxBaseRate)
+        //     rate += inflationRate * inflation / WAD;
         globalIndex = globalIndex * (WAD + rate) / WAD;
     }
 
@@ -329,8 +340,11 @@ contract Vault is ReentrancyGuard, AccessControl {
     // /// function should be called periodically and this contracts address needs to be granted role
     // /// to access the rebase token function of INDEX_MANAGER_ROLE by the rebasetoken contract
     function updateRebaseTokenInterest() external onlyRole(REBASETOKEN_INTEREST_MANAGER_ROLE) {
-        uint256 interest = WAD * (totalShares + totalInterests) / totalShares;
-        i_rebaseToken.updateGlobalIndex(interest);
+        uint256 rawSupply = i_rebaseToken.totalSupply();
+        if (rawSupply == 0) return;
+        uint256 totalAssets = totalLiquidity + (totalBorrowScaled * globalIndex / WAD);
+        uint256 interestRate = WAD * totalAssets / rawSupply;
+        i_rebaseToken.updateGlobalIndex(interestRate);
     }
 
     //GETTERS:
@@ -338,16 +352,6 @@ contract Vault is ReentrancyGuard, AccessControl {
     /// @notice Get the current global interest index
     function getGlobalIndex() external view returns (uint256) {
         return globalIndex;
-    }
-
-    /// @notice Get total ETH interest collected
-    function getTotalInterests() external view returns (uint256) {
-        return totalInterests;
-    }
-
-    /// @notice Get total ETH deposits in the vault
-    function getTotalShares() external view returns (uint256) {
-        return totalShares;
     }
 
     /// @notice Get total ETH deposits in the vault

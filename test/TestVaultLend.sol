@@ -42,7 +42,7 @@ contract VaultLendBase is Test {
 
     //DEPOSIT :
     function preCheckDeposit(address userDepositFrom, address userDepositTo) internal {
-        initialShares = vault.getTotalShares();
+        initialShares = rebaseToken.totalSupply();
         initialLiquidity = vault.getTotalLiquidity();
         initialSrcBalance = userDepositFrom.balance;
         srcAddress = userDepositFrom;
@@ -51,7 +51,7 @@ contract VaultLendBase is Test {
     }
 
     function checkDeposit(uint256 amount) internal view {
-        assertEq(initialShares + amount, vault.getTotalShares());
+        assertEq(initialShares + amount, rebaseToken.totalSupply());
         assertEq(initialLiquidity + amount, vault.getTotalLiquidity());
         assertEq(initialSrcBalance - amount, srcAddress.balance);
         assertEq(initialDstBalance + amount, rebaseToken.balanceOf(dstAddress));
@@ -67,7 +67,7 @@ contract VaultLendBase is Test {
     //withdraw
 
     function preCheckWithdraw(address userWithdraws) internal {
-        initialShares = vault.getTotalShares();
+        initialShares = rebaseToken.totalSupply();
         initialLiquidity = vault.getTotalLiquidity();
         initialSrcBalance = userWithdraws.balance;
         srcAddress = userWithdraws;
@@ -76,7 +76,7 @@ contract VaultLendBase is Test {
     }
 
     function checkWithdraw(uint256 amount) internal view {
-        assertEq(initialShares - amount, vault.getTotalShares());
+        assertEq(initialShares - amount, rebaseToken.totalSupply());
         assertEq(initialLiquidity - amount, vault.getTotalLiquidity());
         assertEq(initialSrcBalance + amount, srcAddress.balance);
         assertEq(initialDstBalance - amount, rebaseToken.balanceOf(dstAddress));
