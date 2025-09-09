@@ -104,44 +104,6 @@ contract Vault is ReentrancyGuard, AccessControl {
         if (!success) revert Vault__transferFailed();
     }
 
-    /// @notice Borrow ETH using available deposited collateral
-    /// @param amountToBorrow Amount of ETH to borrow
-    /// @param token Address of the collateral token
-    /// @param takeMaxAvailable Bool to take max ETH borrowable if not enough collateral
-    function borrow(uint256 amountToBorrow, address token, bool takeMaxAvailable) external nonReentrant {
-        if (amountToBorrow == 0) {
-            revert Borrow__invalidAmount();
-        }
-        uint256 availableCollateral = debtPerTokenPerUser[msg.sender][token].availableCollateral;
-        if (availableCollateral == 0) {
-            revert Borrow__notEnoughCollateral(availableCollateral);
-        }
-
-        uint256 lockedCollateral = collateralToBorrow(token, amountToBorrow);
-        if (lockedCollateral > availableCollateral) {
-            if (takeMaxAvailable == false) {
-                revert Borrow__notEnoughCollateral(availableCollateral);
-            }
-            lockedCollateral = availableCollateral;
-            amountToBorrow = maxEthFrom(token, availableCollateral);
-        }
-
-        if (totalLiquidity == 0 || (amountToBorrow > totalLiquidity)) {
-            revert Borrow__notEnoughLiquidity(totalLiquidity);
-        }
-
-        totalLiquidity -= amountToBorrow;
-        uint256 scaledEth = amountToBorrow * WAD / borrowDebtIndex;
-        totalBorrowScaled += scaledEth;
-        debtPerTokenPerUser[msg.sender][token].debt += scaledEth;
-        debtPerTokenPerUser[msg.sender][token].availableCollateral -= lockedCollateral;
-        debtPerTokenPerUser[msg.sender][token].lockedCollateral += lockedCollateral;
-
-        (bool success,) = payable(msg.sender).call{value: amountToBorrow}("");
-        if (!success) revert Borrow__invalidTransfer();
-        emit UserBorrowedEth(msg.sender, token, amountToBorrow, amountToBorrow);
-    }
-
     /// @notice Deposit specific collateral amount and borrow as much ETH as possible
     /// @param amountToDeposit Amount of collateral user wants to deposit
     /// @param token Address of the collateral token
@@ -167,7 +129,7 @@ contract Vault is ReentrancyGuard, AccessControl {
     function repay(address token) external payable nonReentrant {
         if (msg.value == 0) revert Borrow__invalidAmount();
 
-        Debt storage userDebt = debtPerTokenPerUser[msg.sender][_token];
+        Debt storage userDebt = debtPerTokenPerUser[msg.sender][token];
         if (userDebt.debt == 0) revert Borrow__noDebtForCollateral(token);
 
         uint256 refund;
@@ -215,11 +177,6 @@ contract Vault is ReentrancyGuard, AccessControl {
     /// @notice Accrue interest on all debts by updating global index
     /// @param rate Interest rate to apply (in WAD units, e.g., 1e16 = 1%)
     function accrueBorrowDebtInterest(uint256 rate) external onlyRole(BORROW_INTEREST_MANAGER_ROLE) {
-        //calculate inflation
-        // uint256 totalBorrows = totalBorrowScaled * globalIndex / WAD;
-        // uint256 inflation = totalBorrows * WAD / totalLiquidity + totalBorrows;
-        // if (inflation > maxBaseRate)
-        //     rate += inflationRate * inflation / WAD;
         borrowDebtIndex = borrowDebtIndex * (WAD + rate) / WAD;
     }
 
@@ -253,19 +210,57 @@ contract Vault is ReentrancyGuard, AccessControl {
         collateralPerToken[_token].LVM = _LVM;
     }
 
+    /// @notice Borrow ETH using available deposited collateral
+    /// @param amountToBorrow Amount of ETH to borrow
+    /// @param token Address of the collateral token
+    /// @param takeMaxAvailable Bool to take max ETH borrowable if not enough collateral
+    function borrow(uint256 amountToBorrow, address token, bool takeMaxAvailable) public nonReentrant {
+        if (amountToBorrow == 0) {
+            revert Borrow__invalidAmount();
+        }
+        uint256 availableCollateral = debtPerTokenPerUser[msg.sender][token].availableCollateral;
+        if (availableCollateral == 0) {
+            revert Borrow__notEnoughCollateral(availableCollateral);
+        }
+
+        uint256 lockedCollateral = collateralToBorrow(token, amountToBorrow);
+        if (lockedCollateral > availableCollateral) {
+            if (takeMaxAvailable == false) {
+                revert Borrow__notEnoughCollateral(availableCollateral);
+            }
+            lockedCollateral = availableCollateral;
+            amountToBorrow = maxEthFrom(token, availableCollateral);
+        }
+
+        if (totalLiquidity == 0 || (amountToBorrow > totalLiquidity)) {
+            revert Borrow__notEnoughLiquidity(totalLiquidity);
+        }
+
+        totalLiquidity -= amountToBorrow;
+        uint256 scaledEth = amountToBorrow * WAD / borrowDebtIndex;
+        totalBorrowScaled += scaledEth;
+        debtPerTokenPerUser[msg.sender][token].debt += scaledEth;
+        debtPerTokenPerUser[msg.sender][token].availableCollateral -= lockedCollateral;
+        debtPerTokenPerUser[msg.sender][token].lockedCollateral += lockedCollateral;
+
+        (bool success,) = payable(msg.sender).call{value: amountToBorrow}("");
+        if (!success) revert Borrow__invalidTransfer();
+        emit UserBorrowedEth(msg.sender, token, amountToBorrow, amountToBorrow);
+    }
+
     /// @notice Liquidates a user’s position if undercollateralized
     /// @dev The liquidator must send ETH to cover part or all of the user’s debt
     ///      Collateral is seized proportionally to the ETH paid
     /// @param user The address of the user being liquidated
     /// @param _token The collateral token used by the user
     function liquidate(address user, address _token) external payable nonReentrant onlyRole(LIQUIDATOR_ROLE) {
-        Debt storage userDebt = debtPerTokenPerUser[user][_token];
+        if (msg.value == 0) revert Borrow__invalidAmount();
 
+        Debt storage userDebt = debtPerTokenPerUser[user][_token];
         uint256 accruedDebt = userDebt.debt * borrowDebtIndex / WAD;
-        uint256 maxDebtCovered = maxEthFrom(_token, userDebt.lockedCollateral);
+        uint256 maxDebtCovered = ethFrom(_token, userDebt.lockedCollateral);
 
         if (accruedDebt < maxDebtCovered) revert Borrow__userNotUnderCollaterlized();
-        if (msg.value == 0) revert Borrow__invalidAmount();
 
         uint256 refund;
         uint256 repaid = msg.value;
@@ -347,24 +342,32 @@ contract Vault is ReentrancyGuard, AccessControl {
     }
 
     /// @notice Get the amount of collateral needed to borrow ETH
-    /// @param token Address of collateral token
+    /// @param _token Address of collateral token
     /// @param amountToBorrow Amount of ETH user wants to borrow
-    function collateralToBorrow(address token, uint256 amountToBorrow) internal view returns (uint256) {
+    function collateralToBorrow(address _token, uint256 amountToBorrow) internal view returns (uint256) {
         if (amountToBorrow == type(uint256).max) {
             return amountToBorrow;
         }
-        uint256 ETHforSingleCollateral = maxEthFrom(token, WAD);
-        return ETHforSingleCollateral * amountToBorrow / WAD;
+        uint256 ETHforSingleCollateral = maxEthFrom(_token, WAD);
+        return amountToBorrow * WAD / ETHforSingleCollateral;
     }
 
     /// @notice Compute max ETH borrowable from a given collateral amount
-    /// @param token Collateral token address
+    /// @param _token Collateral token address
     /// @param amount Amount of collateral
     /// @return amountInEth Maximum ETH that can be borrowed
-    function maxEthFrom(address token, uint256 amount) internal view returns (uint256) {
-        Collateral memory collateral = collateralPerToken[token];
-        if (collateral.priceFeed == address(0)) revert Borrow__collateralTokenNotSupported(token);
-        uint256 amountInEth = PriceConverter.getRates(amount, collateral.priceFeed);
+    function maxEthFrom(address _token, uint256 amount) internal view returns (uint256) {
+        Collateral memory collateral = collateralPerToken[_token];
+        uint256 amountInEth = ethFrom(_token, amount);
         return amountInEth * WAD / collateral.LVM;
+    }
+
+    /// @notice Compute conversion to ETH from a given collateral amount
+    /// @param _token Collateral token address
+    /// @param amount Amount of collateral
+    function ethFrom(address _token, uint256 amount) internal view returns (uint256) {
+        Collateral memory collateral = collateralPerToken[_token];
+        if (collateral.priceFeed == address(0)) revert Borrow__collateralTokenNotSupported(_token);
+        return PriceConverter.getRates(amount, collateral.priceFeed);
     }
 }

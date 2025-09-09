@@ -31,24 +31,20 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
     function testCannotLiquidateNoDebtUser() public {
         vm.prank(liquidator);
         vm.expectRevert(PriceConverter.PriceConverter__InvalidAmount.selector);
-        vault.liquidate(user, address(collateralToken));
+        vault.liquidate{value: WAD}(user, address(collateralToken));
     }
 
     function testCannotLiquidateHealthyUser() public {
         borrow(user, 1e18, true);
-        vm.prank(interestManager);
-        vault.accrueBorrowDebtInterest(1e17);
         vm.prank(liquidator);
-        vm.expectRevert(Vault.Borrow__invalidAmount.selector);
-        vault.liquidate(user, address(collateralToken));
+        vm.expectRevert(Vault.Borrow__userNotUnderCollaterlized.selector);
+        vault.liquidate{value: WAD}(user, address(collateralToken));
     }
 
     function testLiquidatorMustSendETH() public {
-        // Simulate undercollateralized user
         borrow(user, 100 * WAD, true);
-
         vm.prank(liquidator);
-        vm.expectRevert(Vault.Borrow__userNotUnderCollaterlized.selector);
+        vm.expectRevert(Vault.Borrow__invalidAmount.selector);
         vault.liquidate(user, address(collateralToken));
     }
 
@@ -77,7 +73,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
         borrow(user, WAD, true);
 
         vm.prank(interestManager);
-        vault.accrueBorrowDebtInterest(5e17);
+        vault.accrueBorrowDebtInterest(55e16);
 
         (uint256 realDebt,,) = vault.debtPerTokenPerUser(user, address(collateralToken));
         uint256 ethToPay = realDebt * vault.getBorrowDebtIndex() / WAD;
@@ -96,9 +92,8 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
 
     function testExcessETHInvalidTransfer() public {
         borrow(user, WAD, true);
-
         vm.prank(interestManager);
-        vault.accrueBorrowDebtInterest(5e17);
+        vault.accrueBorrowDebtInterest(55e16);
 
         (uint256 realDebt,,) = vault.debtPerTokenPerUser(user, address(collateralToken));
         uint256 ethToPay = realDebt * vault.getBorrowDebtIndex() / WAD;

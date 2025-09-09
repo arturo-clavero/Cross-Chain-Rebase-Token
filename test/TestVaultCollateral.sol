@@ -42,7 +42,7 @@ contract VaultCollateralBase is Test, VaultLendBase {
     function newCollateralToken() internal returns (ERC20Mock) {
         ERC20Mock _token = new ERC20Mock();
         vm.prank(collateralManager);
-        vault.modifyCollateral(address(_token), address(mockPriceFeed), 1e18);
+        vault.modifyCollateral(address(_token), address(mockPriceFeed), 15e17);
         return _token;
     }
 

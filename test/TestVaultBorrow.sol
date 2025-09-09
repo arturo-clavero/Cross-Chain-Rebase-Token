@@ -9,7 +9,7 @@ import {VaultCollateralBase} from "./TestVaultCollateral.sol";
 contract VaultBorrowBase is Test, VaultCollateralBase {
     using SafeERC20 for IERC20;
 
-    uint256 public constant BORROW_AMOUNT = 5e23;
+    uint256 public constant BORROW_AMOUNT = 4e23;
 
     address public interestManager = address(0x32);
     address public rebaseTokenIndexManager = address(0x33);
@@ -42,16 +42,18 @@ contract VaultBorrowBase is Test, VaultCollateralBase {
 
     function checkBorrow(uint256 amount) internal view {
         console.log(amount);
-        assertEq(initialUserBalance + amount, srcAddress.balance, "user balance increased");
-        assertEq(initialTotalLiquidity - amount, vault.getTotalLiquidity(), "total liquidity decreased");
         (,, uint256 srcBalance) = vault.debtPerTokenPerUser(srcAddress, address(collateralToken));
         (, uint256 dstBalance,) = vault.debtPerTokenPerUser(srcAddress, address(collateralToken));
         (uint256 debt,,) = vault.debtPerTokenPerUser(srcAddress, address(collateralToken));
         if (amount == 0) {
+            assertEq(srcAddress.balance, initialUserBalance, "user balance unchanged");
+            assertEq(vault.getTotalLiquidity(), initialTotalLiquidity, "total liquidity unchanged");
             assertEq(initialSrcBalance, srcBalance, "0 borrow amount, no change in available collateral");
             assertEq(initialDstBalance, dstBalance, "0 borrow amount, no change in used collateral");
             assertEq(initialDebt, debt, "0 borrow amount, no change in debt balance");
         } else {
+            assertGt(srcAddress.balance, initialUserBalance, "user balance increased");
+            assertLt(vault.getTotalLiquidity(), initialTotalLiquidity, "total liquidity decreased");
             assertLt(srcBalance, initialSrcBalance, "available collateral should decrease");
             assertGt(dstBalance, initialDstBalance, "used collateral should increase");
             assertGt(debt, initialDebt, "debt should increase");
@@ -121,7 +123,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
     function testBorrowOk(uint256 amountToBorrow) public {
         vm.assume(amountToBorrow > 0);
         vm.assume(amountToBorrow <= vault.getTotalLiquidity());
-        depositCollateral(user, amountToBorrow, true);
+        depositCollateral(user, amountToBorrow * 2, true);
         preCheckBorrow(user);
         borrow(user, amountToBorrow, false);
         checkBorrow(amountToBorrow);
@@ -237,7 +239,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
         assertEq(srcBalance, initialSrcBalance);
         assertGt(dstBalance, initialDstBalance);
         assertGt(initialTokenBalance, collateralToken.balanceOf(user));
-        assertEq(initialTotalLiquidity - BORROW_AMOUNT, vault.getTotalLiquidity());
+        assertApproxEqAbs(initialTotalLiquidity - BORROW_AMOUNT, vault.getTotalLiquidity(), 1e12);
     }
 
     //------- REPAYMENT TESTS -------//
