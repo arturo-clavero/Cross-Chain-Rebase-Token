@@ -98,8 +98,8 @@ contract TestVaultLend is Test, VaultLendBase {
     }
     //BASE TESTS
 
-    function testInitialGlobalIndex() external view {
-        assertEq(vault.getGlobalIndex(), 1e18);
+    function testInitialBorrowDebtIndex() external view {
+        assertEq(vault.getBorrowDebtIndex(), 1e18);
     }
 
     function testAdminIsGrantedProperly() external view {

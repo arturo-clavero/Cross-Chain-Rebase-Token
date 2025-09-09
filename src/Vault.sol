@@ -52,7 +52,7 @@ contract Vault is ReentrancyGuard, AccessControl {
     error Borrow__userNotUnderCollaterlized();
 
     uint256 private constant WAD = 1e18;
-    bytes32 public constant COLLATERAL_INTEREST_MANAGER_ROLE = keccak256("COLLATERAL_INTEREST_MANAGER_ROLE");
+    bytes32 public constant BORROW_INTEREST_MANAGER_ROLE = keccak256("BORROW_INTEREST_MANAGER_ROLE");
     bytes32 public constant REBASETOKEN_INTEREST_MANAGER_ROLE = keccak256("REBASETOKEN_INTEREST_MANAGER_ROLE");
     bytes32 public constant COLLATERAL_MANAGER_ROLE = keccak256("COLLATERAL_MANAGER_ROLE");
     bytes32 public constant LIQUIDATOR_ROLE = keccak256("LIQUIDATOR_ROLE");
@@ -60,7 +60,7 @@ contract Vault is ReentrancyGuard, AccessControl {
     uint256 private totalLiquidity; //REAL ETH -> unchanged by globalIndex
     uint256 private totalBorrowScaled; //SCALED ETH -> dependes on globalIndex
     // uint256 private totalInterests;
-    uint256 private globalIndex;
+    uint256 private borrowDebtIndex;
 
     IRebaseToken private immutable i_rebaseToken;
 
@@ -76,7 +76,7 @@ contract Vault is ReentrancyGuard, AccessControl {
     /// @param admin Admin account to manage roles
     constructor(address _rebaseToken, address admin) {
         i_rebaseToken = IRebaseToken(_rebaseToken);
-        globalIndex = WAD;
+        borrowDebtIndex = WAD;
         if (admin == address(0)) {
             admin = msg.sender;
         }
@@ -156,7 +156,7 @@ contract Vault is ReentrancyGuard, AccessControl {
         }
 
         totalLiquidity -= amountToBorrow;
-        uint256 scaledEth = amountToBorrow * WAD / globalIndex;
+        uint256 scaledEth = amountToBorrow * WAD / borrowDebtIndex;
         totalBorrowScaled += scaledEth;
         debtPerTokenPerUser[msg.sender][token].debt += scaledEth;
         debtPerTokenPerUser[msg.sender][token].availableCollateral -= lockedCollateral;
@@ -217,7 +217,7 @@ contract Vault is ReentrancyGuard, AccessControl {
 
         uint256 refund;
         uint256 principalDebt = debtPerTokenPerUser[msg.sender][token].debt;
-        uint256 accruedDebt = principalDebt * globalIndex / WAD;
+        uint256 accruedDebt = principalDebt * borrowDebtIndex / WAD;
         //amount the user has paid back
         uint256 repaid = msg.value;
 
@@ -228,7 +228,7 @@ contract Vault is ReentrancyGuard, AccessControl {
         }
 
         //"original debt" (without interest), the user is repaying
-        uint256 scaledRepaid = repaid * WAD / globalIndex;
+        uint256 scaledRepaid = repaid * WAD / borrowDebtIndex;
         //total locked collateral
         uint256 userCollat = debtPerTokenPerUser[msg.sender][token].usedCollateral;
         //collateral to return to user in exchange for paying back
@@ -260,13 +260,13 @@ contract Vault is ReentrancyGuard, AccessControl {
 
     /// @notice Accrue interest on all debts by updating global index
     /// @param rate Interest rate to apply (in WAD units, e.g., 1e16 = 1%)
-    function accrueInterest(uint256 rate) external onlyRole(COLLATERAL_INTEREST_MANAGER_ROLE) {
+    function accrueBorrowDebtInterest(uint256 rate) external onlyRole(BORROW_INTEREST_MANAGER_ROLE) {
         //calculate inflation
         // uint256 totalBorrows = totalBorrowScaled * globalIndex / WAD;
         // uint256 inflation = totalBorrows * WAD / totalLiquidity + totalBorrows;
         // if (inflation > maxBaseRate)
         //     rate += inflationRate * inflation / WAD;
-        globalIndex = globalIndex * (WAD + rate) / WAD;
+        borrowDebtIndex = borrowDebtIndex * (WAD + rate) / WAD;
     }
 
     /// @notice Add a new collateral type
@@ -308,7 +308,7 @@ contract Vault is ReentrancyGuard, AccessControl {
         Debt storage userDebt = debtPerTokenPerUser[user][_token];
         // Collateral memory collateral = collateralPerToken[_token];
 
-        uint256 realDebt = userDebt.debt * globalIndex / WAD;
+        uint256 realDebt = userDebt.debt * borrowDebtIndex / WAD;
         uint256 maxBorrow = maxEthFrom(_token, userDebt.usedCollateral);
 
         if (realDebt <= maxBorrow) revert Borrow__userNotUnderCollaterlized();
@@ -320,7 +320,7 @@ contract Vault is ReentrancyGuard, AccessControl {
         }
 
         uint256 seizedCollateral = userDebt.usedCollateral * payETH / realDebt;
-        uint256 scaledPaid = payETH * WAD / globalIndex;
+        uint256 scaledPaid = payETH * WAD / borrowDebtIndex;
         userDebt.debt -= scaledPaid;
         userDebt.usedCollateral -= seizedCollateral;
 
@@ -342,7 +342,7 @@ contract Vault is ReentrancyGuard, AccessControl {
     function updateRebaseTokenInterest() external onlyRole(REBASETOKEN_INTEREST_MANAGER_ROLE) {
         uint256 rawSupply = i_rebaseToken.totalSupply();
         if (rawSupply == 0) return;
-        uint256 totalAssets = totalLiquidity + (totalBorrowScaled * globalIndex / WAD);
+        uint256 totalAssets = totalLiquidity + (totalBorrowScaled * borrowDebtIndex / WAD);
         uint256 interestRate = WAD * totalAssets / rawSupply;
         i_rebaseToken.updateGlobalIndex(interestRate);
     }
@@ -350,8 +350,8 @@ contract Vault is ReentrancyGuard, AccessControl {
     //GETTERS:
 
     /// @notice Get the current global interest index
-    function getGlobalIndex() external view returns (uint256) {
-        return globalIndex;
+    function getBorrowDebtIndex() external view returns (uint256) {
+        return borrowDebtIndex;
     }
 
     /// @notice Get total ETH deposits in the vault

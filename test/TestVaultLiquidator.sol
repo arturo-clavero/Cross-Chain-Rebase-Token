@@ -37,7 +37,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
     function testCannotLiquidateHealthyUser() public {
         borrow(user, 1e18, true);
         vm.prank(interestManager);
-        vault.accrueInterest(1e17);
+        vault.accrueBorrowDebtInterest(1e17);
         vm.prank(liquidator);
         vm.expectRevert(Vault.Borrow__invalidAmount.selector);
         vault.liquidate(user, address(collateralToken));
@@ -56,11 +56,11 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
         borrow(user, WAD, true);
 
         vm.prank(interestManager);
-        vault.accrueInterest(10e17);
+        vault.accrueBorrowDebtInterest(10e17);
 
         // Pay full debt
         (uint256 realDebt,,) = vault.debtPerTokenPerUser(user, address(collateralToken));
-        uint256 ethToPay = realDebt * vault.getGlobalIndex() / WAD;
+        uint256 ethToPay = realDebt * vault.getBorrowDebtIndex() / WAD;
 
         vm.prank(liquidator);
         vault.liquidate{value: ethToPay}(user, address(collateralToken));
@@ -77,10 +77,10 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
         borrow(user, WAD, true);
 
         vm.prank(interestManager);
-        vault.accrueInterest(5e17);
+        vault.accrueBorrowDebtInterest(5e17);
 
         (uint256 realDebt,,) = vault.debtPerTokenPerUser(user, address(collateralToken));
-        uint256 ethToPay = realDebt * vault.getGlobalIndex() / WAD;
+        uint256 ethToPay = realDebt * vault.getBorrowDebtIndex() / WAD;
 
         // Send extra ETH
         uint256 excess = 5 ether;
@@ -98,10 +98,10 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
         borrow(user, WAD, true);
 
         vm.prank(interestManager);
-        vault.accrueInterest(5e17);
+        vault.accrueBorrowDebtInterest(5e17);
 
         (uint256 realDebt,,) = vault.debtPerTokenPerUser(user, address(collateralToken));
-        uint256 ethToPay = realDebt * vault.getGlobalIndex() / WAD;
+        uint256 ethToPay = realDebt * vault.getBorrowDebtIndex() / WAD;
 
         // Send extra ETH
         uint256 excess = 5 ether;

@@ -25,7 +25,7 @@ contract VaultBorrowBase is Test, VaultCollateralBase {
 
         //grant permission
         vm.startPrank(admin);
-        vault.grantRole(vault.COLLATERAL_INTEREST_MANAGER_ROLE(), interestManager);
+        vault.grantRole(vault.BORROW_INTEREST_MANAGER_ROLE(), interestManager);
         vault.grantRole(vault.REBASETOKEN_INTEREST_MANAGER_ROLE(), rebaseTokenIndexManager);
         vm.stopPrank();
     }
@@ -77,7 +77,7 @@ contract VaultBorrowBase is Test, VaultCollateralBase {
     }
 
     function checkRepay(uint256 amount) internal view {
-        uint256 debtIndex = vault.getGlobalIndex();
+        uint256 debtIndex = vault.getBorrowDebtIndex();
         uint256 scaledDebt = initialDebt * debtIndex / WAD;
         uint256 overpayment;
         uint256 scaledDebtLeft;
@@ -244,7 +244,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
     function testPartialRepayUpdatesDebtAndCollateral() public {
         borrow(user, 1e18, true);
         vm.prank(interestManager);
-        vault.accrueInterest(1e17); // 10%
+        vault.accrueBorrowDebtInterest(1e17); // 10%
         vm.startPrank(user);
         (uint256 debtBefore,,) = vault.debtPerTokenPerUser(user, address(collateralToken));
         vault.repay{value: 0.5 ether}(address(collateralToken));
@@ -257,7 +257,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
     function testFullRepayReturnsCollateralAndRefundsExcess() public {
         borrow(user, 1e18, true);
         vm.prank(interestManager);
-        vault.accrueInterest(1e17); // 10%
+        vault.accrueBorrowDebtInterest(1e17); // 10%
         vm.startPrank(user);
         uint256 balBefore = collateralToken.balanceOf(user);
         vault.repay{value: 2 ether}(address(collateralToken));
@@ -314,14 +314,14 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
     // ---------- INTEREST TESTS ----------
     function testAccrueInterestOnlyRole() public {
         vm.startPrank(interestManager);
-        vault.accrueInterest(1e17); // 10%
+        vault.accrueBorrowDebtInterest(1e17); // 10%
         vm.stopPrank();
     }
 
     function testAccrueInterestRevertsForUnauthorized() public {
         vm.startPrank(user);
         vm.expectRevert();
-        vault.accrueInterest(1e17);
+        vault.accrueBorrowDebtInterest(1e17);
         vm.stopPrank();
     }
 
