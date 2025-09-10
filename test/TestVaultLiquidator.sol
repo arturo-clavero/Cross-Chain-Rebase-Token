@@ -28,7 +28,22 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
     }
 
     //------- LIQUIDATOR MANAGEMENT TESTS -------//
+    function testCannotLiquidateUnsupportedToken() public {
+        address unsupportedToken = vm.addr(404);
+        borrow(user, WAD, true);
+
+        vm.prank(interestManager);
+        vault.accrueBorrowDebtInterest(10e17);
+
+        vm.prank(liquidator);
+        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__collateralTokenNotSupported.selector, unsupportedToken));
+        vault.liquidate{value: WAD}(user, unsupportedToken);
+    }
+
     function testCannotLiquidateNoDebtUser() public {
+        vm.prank(interestManager);
+        vault.accrueBorrowDebtInterest(10e17);
+
         vm.prank(liquidator);
         vm.expectRevert(PriceConverter.PriceConverter__InvalidAmount.selector);
         vault.liquidate{value: WAD}(user, address(collateralToken));
@@ -36,6 +51,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
 
     function testCannotLiquidateHealthyUser() public {
         borrow(user, 1e18, true);
+
         vm.prank(liquidator);
         vm.expectRevert(Vault.Borrow__userNotUnderCollaterlized.selector);
         vault.liquidate{value: WAD}(user, address(collateralToken));
@@ -43,6 +59,10 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
 
     function testLiquidatorMustSendETH() public {
         borrow(user, 100 * WAD, true);
+
+        vm.prank(interestManager);
+        vault.accrueBorrowDebtInterest(10e17);
+
         vm.prank(liquidator);
         vm.expectRevert(Vault.Borrow__invalidAmount.selector);
         vault.liquidate(user, address(collateralToken));
