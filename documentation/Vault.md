@@ -13,7 +13,7 @@ The Vault allows users to deposit ETH, borrow ETH against collateral, and repay 
 * **Repay ETH and reclaim collateral proportionally**
 * **Interest Accrual** using a global interest index
 * **Collateral Management** with Chainlink price feeds
-* **Liquidation** when borrowers become undercollateralized
+* **liquidity** when borrowers become undercollateralized
 
 ---
 
@@ -21,7 +21,7 @@ The Vault allows users to deposit ETH, borrow ETH against collateral, and repay 
 
 * `INTEREST_MANAGER_ROLE` – Can update global interest index
 * `COLLATERAL_MANAGER_ROLE` – Can add or modify supported collateral
-* `LIQUIDATOR_ROLE` (optional) – Any address may call liquidation, but role can be restricted
+* `LIQUIDATOR_ROLE` (optional) – Any address may call liquidity, but role can be restricted
 
 ---
 
@@ -97,11 +97,11 @@ The Vault allows users to deposit ETH, borrow ETH against collateral, and repay 
 
 ---
 
-## Liquidation
+## liquidity
 
 ### Trigger
 
-A user becomes eligible for liquidation if their **health factor < 1**:
+A user becomes eligible for liquidity if their **health factor < 1**:
 
 ```
 healthFactor = (collateralValue * LVM) / totalDebt

@@ -98,8 +98,9 @@ contract TestVaultLend is Test, VaultLendBase {
     }
     //BASE TESTS
 
-    function testInitialBorrowDebtIndex() external view {
+    function testConstructorValues() external view {
         assertEq(vault.getBorrowDebtIndex(), 1e18);
+        assertEq(vault.getLiquidityThreshold(), 1e17);
     }
 
     function testAdminIsGrantedProperly() external view {
@@ -129,7 +130,7 @@ contract TestVaultLend is Test, VaultLendBase {
     function testDepositRevertOnZero() external {
         preCheckDeposit(user1, user1);
         vm.prank(user1);
-        vm.expectRevert(Vault.Vault__insufficientAmount.selector);
+        vm.expectRevert(Vault.Vault__invalidAmount.selector);
         vault.deposit{value: 0}();
         checkDeposit(0);
     }
@@ -137,7 +138,7 @@ contract TestVaultLend is Test, VaultLendBase {
     function testDepositToRevertOnZero() external {
         preCheckDeposit(user1, user2);
         vm.prank(user1);
-        vm.expectRevert(Vault.Vault__insufficientAmount.selector);
+        vm.expectRevert(Vault.Vault__invalidAmount.selector);
         vault.depositTo{value: 0}(user2);
         checkDeposit(0);
     }
@@ -153,7 +154,7 @@ contract TestVaultLend is Test, VaultLendBase {
         preCheckWithdraw(user1);
 
         vm.startPrank(user1);
-        vm.expectRevert(Vault.Vault__insufficientAmount.selector);
+        vm.expectRevert(Vault.Vault__invalidAmount.selector);
         vault.withdraw(0);
         vm.stopPrank();
 

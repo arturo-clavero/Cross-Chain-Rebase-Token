@@ -141,7 +141,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
         depositCollateral(user, COLLATERAL_TOKEN_FUND_AMOUNT, false);
         preCheckBorrow(user);
         vm.prank(user);
-        vm.expectRevert(Vault.Borrow__invalidAmount.selector);
+        vm.expectRevert(Vault.Vault__invalidAmount.selector);
         vault.borrow(0, address(collateralToken), true);
         checkBorrow(0);
     }
@@ -157,7 +157,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
         depositCollateral(user, COLLATERAL_TOKEN_FUND_AMOUNT, false);
         preCheckBorrow(user);
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__notEnoughLiquidity.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Vault__notEnoughLiquidity.selector, 0));
         vault.borrow(BORROW_AMOUNT, address(collateralToken), true);
         vm.stopPrank();
         checkBorrow(0);
@@ -166,7 +166,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
     function testBorrowNotEnoughCollateral() public {
         preCheckBorrow(user);
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__notEnoughCollateral.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Vault__notEnoughCollateral.selector, 0));
         vault.borrow(BORROW_AMOUNT, address(collateralToken), true);
         vm.stopPrank();
         checkBorrow(0);
@@ -177,7 +177,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
         depositCollateral(user, smallAmount, false);
         preCheckBorrow(user);
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__notEnoughCollateral.selector, smallAmount));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Vault__notEnoughCollateral.selector, smallAmount));
         vault.borrow(type(uint256).max, address(collateralToken), false);
         vm.stopPrank();
         checkBorrow(0);
@@ -196,7 +196,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
         depositCollateral(userRejector, COLLATERAL_TOKEN_FUND_AMOUNT, false);
         preCheckBorrow(userRejector);
         vm.prank(userRejector);
-        vm.expectRevert(Vault.Borrow__invalidTransfer.selector);
+        vm.expectRevert(Vault.Vault__invalidTransfer.selector);
         vault.borrow(BORROW_AMOUNT, address(collateralToken), true);
         checkBorrow(0);
     }
@@ -277,7 +277,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
         rejector.rejectPayment();
         vm.startPrank(address(rejector));
         uint256 balBefore = collateralToken.balanceOf(address(rejector));
-        vm.expectRevert(Vault.Borrow__invalidTransfer.selector);
+        vm.expectRevert(Vault.Vault__invalidTransfer.selector);
         vault.repay{value: 2 ether}(address(collateralToken));
         uint256 balAfter = collateralToken.balanceOf(address(rejector));
         vm.stopPrank();
@@ -286,14 +286,14 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
 
     function testRepayZeroReverts() public {
         vm.startPrank(user);
-        vm.expectRevert(Vault.Borrow__invalidAmount.selector);
+        vm.expectRevert(Vault.Vault__invalidAmount.selector);
         vault.repay{value: 0}(address(collateralToken));
         vm.stopPrank();
     }
 
     function testRepayNoDebtForCollateral() public {
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__noDebtForCollateral.selector, address(collateralToken)));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Vault__noDebtForCollateral.selector, address(collateralToken)));
         vault.repay{value: 1}(address(collateralToken));
         vm.stopPrank();
     }

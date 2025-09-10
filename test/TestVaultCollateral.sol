@@ -91,7 +91,7 @@ contract TestVaultCollateral is VaultCollateralBase {
     function testDepositCollateralRevertZero() public {
         preCheckCollateral(user);
         vm.startPrank(user);
-        vm.expectRevert(Vault.Borrow__invalidAmount.selector);
+        vm.expectRevert(Vault.Vault__invalidAmount.selector);
         vault.depositCollateral(0, address(collateralToken));
         vm.stopPrank();
         checkCollateral(0);
@@ -102,7 +102,7 @@ contract TestVaultCollateral is VaultCollateralBase {
         preCheckCollateral(user);
         vm.startPrank(user);
         vm.expectRevert(
-            abi.encodeWithSelector(Vault.Borrow__collateralTokenNotSupported.selector, address(collateralToken))
+            abi.encodeWithSelector(Vault.Vault__collateralTokenNotSupported.selector, address(collateralToken))
         );
         vault.depositCollateral(COLLATERAL_TOKEN_FUND_AMOUNT, address(collateralToken));
         vm.stopPrank();
@@ -113,7 +113,7 @@ contract TestVaultCollateral is VaultCollateralBase {
         collateralToken.mint(userWithoutTokens, COLLATERAL_TOKEN_FUND_AMOUNT);
         preCheckCollateral(userWithoutTokens);
         vm.startPrank(userWithoutTokens);
-        vm.expectRevert(Vault.Borrow__insufficientAllowance.selector);
+        vm.expectRevert(Vault.Vault__insufficientAllowance.selector);
         vault.depositCollateral(COLLATERAL_TOKEN_FUND_AMOUNT, address(collateralToken));
         vm.stopPrank();
         checkCollateral(0);
@@ -149,7 +149,7 @@ contract TestVaultCollateral is VaultCollateralBase {
 
     function testAddCollateral_RevertIfAlreadyExists() public {
         vm.startPrank(collateralManager);
-        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__collateralAlreadyExists.selector));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Vault__collateralAlreadyExists.selector));
         vault.addCollateral(address(collateralToken), address(0xfeed), 2e18);
         vm.stopPrank();
     }
@@ -187,15 +187,15 @@ contract TestVaultCollateral is VaultCollateralBase {
         vm.startPrank(collateralManager);
 
         // zero token
-        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Vault__invalidCollateralParams.selector));
         vault.modifyCollateral(address(0), address(0x1234), 3e18);
 
         // zero priceFeed
-        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Vault__invalidCollateralParams.selector));
         vault.modifyCollateral(address(collateralToken), address(0), 3e18);
 
         // too low LVM
-        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Vault__invalidCollateralParams.selector));
         vault.modifyCollateral(address(collateralToken), address(0x1234), 0.5e18);
 
         vm.stopPrank();
@@ -219,7 +219,7 @@ contract TestVaultCollateral is VaultCollateralBase {
 
     function testModifyCollateralPriceFeed_RevertIfZeroFeed() public {
         vm.startPrank(collateralManager);
-        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Vault__invalidCollateralParams.selector));
         vault.modifyCollateralPriceFeed(address(collateralToken), address(0));
         vm.stopPrank();
     }
@@ -227,7 +227,7 @@ contract TestVaultCollateral is VaultCollateralBase {
     function testModifyCollateralPriceFeed_RevertIfCollateralDoesNotExist() public {
         ERC20Mock newToken = new ERC20Mock();
         vm.startPrank(collateralManager);
-        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__collateralDoesNotExist.selector));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Vault__collateralDoesNotExist.selector));
         vault.modifyCollateralPriceFeed(address(newToken), address(0x1234));
         vm.stopPrank();
     }
@@ -250,7 +250,7 @@ contract TestVaultCollateral is VaultCollateralBase {
 
     function testModifyCollateralLVM_RevertIfTooLow() public {
         vm.startPrank(collateralManager);
-        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__invalidCollateralParams.selector));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Vault__invalidCollateralParams.selector));
         vault.modifyCollateralLVM(address(collateralToken), 0.5e18);
         vm.stopPrank();
     }
@@ -258,7 +258,7 @@ contract TestVaultCollateral is VaultCollateralBase {
     function testModifyCollateralLVM_RevertIfCollateralDoesNotExist() public {
         ERC20Mock newToken = new ERC20Mock();
         vm.startPrank(collateralManager);
-        vm.expectRevert(abi.encodeWithSelector(Vault.Borrow__collateralDoesNotExist.selector));
+        vm.expectRevert(abi.encodeWithSelector(Vault.Vault__collateralDoesNotExist.selector));
         vault.modifyCollateralLVM(address(newToken), 2e18);
         vm.stopPrank();
     }

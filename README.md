@@ -74,14 +74,14 @@ This avoids looping over all accounts and keeps the system gas-efficient.
 
 ---
 
-### 6. Liquidation
+### 6. liquidity
 
 * A user is liquidatable if their **health factor < 1**:
 
   ```
   healthFactor = (collateralValue * LVM) / totalDebt
   ```
-* Liquidation process:
+* liquidity process:
 
   1. Liquidator pays ETH to cover part (or all) of the debt
   2. Equivalent (or discounted) collateral is seized and transferred to the liquidator
@@ -110,7 +110,7 @@ This mechanism keeps the vault solvent and incentivizes third parties to maintai
 More detailed documentation is available in the `documentation` folder:
 
 * `RebaseToken.md` – Token mechanics and role management
-* `Vault.md` – Deposit, borrow, repay, interest logic, liquidation
+* `Vault.md` – Deposit, borrow, repay, interest logic, liquidity
 * `PriceConverter.md` – Collateral conversion mechanics
 * `Whitepaper.md` – High-level overview, purpose, and intended usage
 

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vault Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Roboto+Mono:wght@400;500&family=Montserrat:wght@600&display=swap" rel="stylesheet">
+<style>
+body {
+    margin: 0;
+    font-family: 'Inter', sans-serif;
+    background: #0f111a;
+    color: #e0e0e0;
+}
+
+/* Navbar */
+.navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 30px;
+    position: sticky;
+    top: 0;
+    background: rgba(20, 20, 30, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 100;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+.navbar .app-name {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.8em;
+    font-weight: 600;
+    color: #ffffff;
+}
+.navbar .nav-buttons {
+    display: flex;
+    gap: 15px;
+}
+.navbar .nav-buttons button {
+    padding: 8px 20px;
+    border-radius: 30px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.05);
+    color: #fff;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-family: 'Inter', sans-serif;
+}
+.navbar .nav-buttons button.active,
+.navbar .nav-buttons button:hover {
+    background: linear-gradient(135deg, #f0c27b, #4b1248);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.navbar .wallet-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    border-radius: 30px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: linear-gradient(135deg, #f0c27b, #4b1248);
+    font-family: 'Roboto Mono', monospace;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+.navbar .wallet-btn img { width: 20px; height: 20px; }
+.navbar .wallet-btn:hover { opacity: 0.85; }
+
+/* Borrow Banner */
+.borrow-banner {
+    max-width: 900px;
+    margin: 50px auto;
+    padding: 50px 40px;
+    border-radius: 25px;
+    background: linear-gradient(145deg, #1f1f2f, #272738);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+    text-align: center;
+    color: #ffffff;
+    font-family: 'Montserrat', sans-serif;
+}
+.borrow-banner .banner-title {
+    font-size: 3em;
+    font-weight: 700;
+    margin-bottom: 30px;
+    color: #fff;
+}
+.borrow-banner .banner-metrics {
+    display: flex;
+    justify-content: center;
+    gap: 50px;
+    flex-wrap: wrap;
+}
+.borrow-banner .banner-item {
+    text-align: center;
+    font-family: 'Roboto Mono', monospace;
+}
+.borrow-banner .banner-label { font-size: 1em; color: #aaa; margin-bottom: 8px; }
+.borrow-banner .banner-value { font-size: 1.8em; font-weight: 600; color: #fff; }
+
+/* Borrow/Repay Section Wrapper */
+.borrow-main-wrapper {
+    max-width: 900px;
+    margin: 0 auto 50px auto;
+    padding: 20px 0;
+    /* background: rgba(31,31,47,0.6); */
+    /* border-radius: 20px; */
+    display: flex;
+    justify-content: center;
+}
+
+/* Borrow/Repay Grid */
+.borrow-main {
+    display: flex;
+    justify-content: space-between;
+    gap: 40px;
+    flex-wrap: wrap;
+    width: 100%;
+}
+.borrow-card {
+    flex: 1;
+    min-width: 250px;
+    max-width: 350px;
+    height: 300px;
+    background: rgba(39,39,56,0.85);
+    border-radius: 20px;
+    padding: 30px 20px;
+    text-align: center;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.borrow-card:hover { transform: translateY(-5px); }
+.borrow-card .amount { font-size: 1.8em; font-weight: 600; margin-top: 15px; }
+
+/* Buttons */
+.borrow-card button.borrow-btn {
+        background: linear-gradient(135deg, rgba(92, 16, 150, 0.415), rgba(18,75,72,0.85));
+
+    /* background: linear-gradient(135deg, #f0c27b, #4b1248); */
+    padding: 18px 16px;
+    margin: 0 80px;
+    font-size: 1.1em;
+    border-radius: 32px;
+    border: none;
+    cursor: pointer;
+    color: #fff;
+}
+/* Buttons */
+.borrow-card button.repay-btn {
+        background: linear-gradient(135deg, rgba(92, 16, 150, 0.415), rgba(18,75,72,0.85));
+
+    /* background: linear-gradient(135deg, #f0c27b, #4b1248); */
+    padding: 18px 16px;
+    margin: 0 80px;
+    font-size: 1.1em;
+    border-radius: 32px;
+    border: none;
+    cursor: pointer;
+    color: #fff;
+}
+
+
+/* Collateral Grid */
+.collateral-grid {
+    max-width: 900px;
+    margin: 0 auto 60px auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.collateral-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(145deg, #1f1f2f, #272738);
+    padding: 15px 20px;
+    border-radius: 15px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.collateral-left { display:flex; align-items:center; gap:15px; }
+.collateral-left .logo { width: 24px; height: 24px; background: #555; border-radius: 50%; display:inline-block; }
+.collateral-left .name { font-weight: 600; }
+.collateral-left .lvm { font-family: 'Roboto Mono', monospace; color:#aaa; }
+.collateral-right button {
+    padding: 8px 18px;
+    font-size: 0.9em;
+    border-radius: 12px;
+    border:none;
+    cursor:pointer;
+    color:white;
+    background: linear-gradient(135deg, rgba(224, 39, 156, 0.31), rgba(30,80,70,0.9));
+}
+
+.collateral-right button:hover { transform: translateY(-2px); }
+
+/* .collateral-right button:hover { opacity:1; } */
+
+/* Pages */
+.page { display: none; max-width: 1000px; margin: 0 auto; }
+.page.active { display: block; }
+</style>
+</head>
+<body>
+
+<!-- Navbar -->
+<div class="navbar">
+    <div class="app-name">VaultX</div>
+    <div class="nav-buttons">
+        <button onclick="switchPage('lend')">Lend</button>
+        <button class="active" onclick="switchPage('borrow')">Borrow</button>
+    </div>
+    <div class="wallet-btn" onclick="connectWallet()">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" alt="MetaMask"> Connect
+    </div>
+</div>
+
+<!-- Borrow Page -->
+<div class="page active" id="borrow-page">
+    <div class="borrow-banner">
+        <div class="banner-title">Borrow</div>
+        <div class="banner-metrics">
+            <div class="banner-item">
+                <div class="banner-label">Total Assets</div>
+                <div class="banner-value" id="total-assets">10 ETH</div>
+            </div>
+            <div class="banner-item">
+                <div class="banner-label">Total Liquidity</div>
+                <div class="banner-value" id="total-liquidity">15 ETH</div>
+            </div>
+            <div class="banner-item">
+                <div class="banner-label">Total Borrows</div>
+                <div class="banner-value" id="total-borrows">5 ETH</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="borrow-main-wrapper">
+        <div class="borrow-main">
+            <div class="borrow-card">
+                <div class="amount" id="available-amount">1.5 ETH</div>
+                <div>Available to Borrow</div>
+                <button class="borrow-btn" onclick="borrowAction()">Borrow</button>
+            </div>
+            <div class="borrow-card">
+                <div class="amount" id="owed-amount">0.8 ETH</div>
+                <div>Amount Owed</div>
+                <button class="repay-btn" onclick="repayAction()">Repay</button>
+            </div>
+        </div>
+    </div>
+
+    <h3 style="text-align:center; margin-bottom:15px; font-family:'Montserrat',sans-serif; color:#ccc;">Available Collateral Tokens</h3>
+
+    <div class="collateral-grid">
+        <div class="collateral-item">
+            <div class="collateral-left"><span class="logo"></span><span class="name">ETH</span><span class="lvm">LVM: 0.8</span></div>
+            <div class="collateral-right"><button onclick="depositCollateral('ETH')">Deposit</button></div>
+        </div>
+        <div class="collateral-item">
+            <div class="collateral-left"><span class="logo"></span><span class="name">DAI</span><span class="lvm">LVM: 1.2</span></div>
+            <div class="collateral-right"><button onclick="depositCollateral('DAI')">Deposit</button></div>
+        </div>
+        <div class="collateral-item">
+            <div class="collateral-left"><span class="logo"></span><span class="name">USDC</span><span class="lvm">LVM: 1.1</span></div>
+            <div class="collateral-right"><button onclick="depositCollateral('USDC')">Deposit</button></div>
+        </div>
+    </div>
+</div>
+
+<!-- Lend Page -->
+<div class="page" id="lend-page">
+    <div class="borrow-banner">Lend Overview</div>
+</div>
+
+<script>
+function switchPage(page){
+    document.querySelectorAll('.nav-buttons button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById(`${page}-page`).classList.add('active');
+    document.querySelector(`.nav-buttons button[onclick*="${page}"]`).classList.add('active');
+}
+function connectWallet(){ alert("Connect to MetaMask"); }
+function borrowAction(){ 
+    let avail = document.getElementById('available-amount');
+    let owed = document.getElementById('owed-amount');
+    let val = parseFloat(avail.innerText) - 0.2;
+    avail.innerText = val.toFixed(2) + " ETH";
+    owed.innerText = (parseFloat(owed.innerText)+0.2).toFixed(2) + " ETH";
+}
+function repayAction(){
+    let avail = document.getElementById('available-amount');
+    let owed = document.getElementById('owed-amount');
+    let val = parseFloat(owed.innerText) - 0.1;
+    owed.innerText = val.toFixed(2) + " ETH";
+    avail.innerText = (parseFloat(avail.innerText)+0.1).toFixed(2) + " ETH";
+}
+function depositCollateral(token){ alert(`Deposit collateral for ${token}`); }
+</script>
+
+</body>
+</html>
