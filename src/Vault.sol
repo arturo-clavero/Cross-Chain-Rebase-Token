@@ -152,7 +152,7 @@ contract Vault is ReentrancyGuard, AccessControl {
         uint256 returnCollateral;
 
         //if user has paid all his debt, all his collateral is returned
-        if (scaledRepaid > principalDebt) {
+        if (scaledRepaid >= principalDebt) {
             returnCollateral = userCollat;
             scaledRepaid = principalDebt;
         } else {
