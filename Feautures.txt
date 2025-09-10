@@ -1,6 +1,3 @@
-5. liquidity
-Multi collaterized tokens
-
 1. Interest Acruel automated // lazy
 
 3. Emergency / Risk Modes
@@ -9,6 +6,8 @@ Could freeze minting/redeeming or force liquidity / just refund some lcoked cola
 Can be layered on top of your current health factor checks.
 Increase base with a linear ft ...
 Limit on borrow like 40 pc of liquidity... 
+pause / unpause
+Increase liquidityPrecision if vault liquidity is low to encourage liquidation.
 
 5. testing:
 invariant testing
@@ -18,6 +17,7 @@ slither
 
 2. Cross chain token chainlink
 
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 4. Governance Hooks
 Multi-sig or DAO-controlled adjustments to:
 Collateral types

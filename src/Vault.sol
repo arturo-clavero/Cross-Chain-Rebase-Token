@@ -61,7 +61,7 @@ contract Vault is ReentrancyGuard, AccessControl {
 
     /// @dev how soon you get liquidated (in WAD)
     uint256 private liquidityThreshold;
-    /// @dev rewards from debt interests for liquidators (in WAD)
+    /// @dev rewards from debt interests for liqborrowDebtIndexuidators (in WAD)
     uint256 private liquidityPrecision;
     /// @dev total amount of ETH available in the vault (in WAD)
     uint256 private totalLiquidity;
@@ -111,32 +111,13 @@ contract Vault is ReentrancyGuard, AccessControl {
             amount = i_rebaseToken.balanceOf(msg.sender);
         }
         if (totalLiquidity < amount) revert Vault__insufficientLiquidity();
+        //TODO!
 
         totalLiquidity -= amount;
 
         i_rebaseToken.burn(msg.sender, amount);
         (bool success,) = msg.sender.call{value: amount}("");
         if (!success) revert Vault__transferFailed();
-    }
-
-    /// @notice Deposit specific collateral amount and borrow as much ETH as possible
-    /// @param amountToDeposit Amount of collateral user wants to deposit
-    /// @param token Address of the collateral token
-    function depositCollateralAmountAndBorrowMax(uint256 amountToDeposit, address token) external {
-        depositCollateral(amountToDeposit, token);
-        borrow(type(uint256).max, token, true);
-    }
-
-    /// @notice Deposit as much collateral needed to borrow specific amount of ETH
-    /// @param amountToBorrow Amount of ETH to borrow
-    /// @param token Address of the collateral token
-    function depositCollateralMaxAndBorrowAmount(uint256 amountToBorrow, address token) external {
-        uint256 necessaryCollateral = collateralToBorrow(token, amountToBorrow);
-        uint256 availableCollateral = debtPerTokenPerUser[msg.sender][token].availableCollateral;
-        if (availableCollateral < necessaryCollateral) {
-            depositCollateral(necessaryCollateral - availableCollateral, token);
-        }
-        borrow(type(uint256).max, token, true);
     }
 
     /// @notice Repay borrowed ETH and retrieve proportional collateral
@@ -150,6 +131,7 @@ contract Vault is ReentrancyGuard, AccessControl {
         uint256 refund;
         uint256 principalDebt = userDebt.debt;
         uint256 accruedDebt = principalDebt * borrowDebtIndex / WAD;
+
         //amount the user has paid back
         uint256 repaid = msg.value;
 
@@ -193,36 +175,6 @@ contract Vault is ReentrancyGuard, AccessControl {
     /// @param rate Interest rate to apply (in WAD units, e.g., 1e16 = 1%)
     function accrueBorrowDebtInterest(uint256 rate) external onlyRole(BORROW_INTEREST_MANAGER_ROLE) {
         borrowDebtIndex = borrowDebtIndex * (WAD + rate) / WAD;
-    }
-
-    /// @notice Add a new collateral type
-    /// @param _token ERC20 token address
-    /// @param _priceFeed Chainlink price feed for token
-    /// @param _LVM Loan-to-value multiplier in WAD
-    function addCollateral(address _token, address _priceFeed, uint256 _LVM)
-        external
-        onlyRole(COLLATERAL_MANAGER_ROLE)
-    {
-        if (collateralPerToken[_token].LVM != 0) revert Vault__collateralAlreadyExists();
-        modifyCollateral(_token, _priceFeed, _LVM);
-    }
-
-    /// @notice Update price feed for a collateral token
-    /// @param _token Token address
-    /// @param _priceFeed New price feed address
-    function modifyCollateralPriceFeed(address _token, address _priceFeed) external onlyRole(COLLATERAL_MANAGER_ROLE) {
-        if (_priceFeed == address(0)) revert Vault__invalidCollateralParams();
-        if (collateralPerToken[_token].LVM == 0) revert Vault__collateralDoesNotExist();
-        collateralPerToken[_token].priceFeed = _priceFeed;
-    }
-
-    /// @notice Update LVM for a collateral token
-    /// @param _token Token address
-    /// @param _LVM New LVM value (in WAD)
-    function modifyCollateralLVM(address _token, uint256 _LVM) external onlyRole(COLLATERAL_MANAGER_ROLE) {
-        if (_LVM < WAD) revert Vault__invalidCollateralParams();
-        if (collateralPerToken[_token].LVM == 0) revert Vault__collateralDoesNotExist();
-        collateralPerToken[_token].LVM = _LVM;
     }
 
     /// @notice Liquidates a user’s position if undercollateralized
@@ -344,8 +296,6 @@ contract Vault is ReentrancyGuard, AccessControl {
         if (_token == address(0) || _priceFeed == address(0) || _LVM < WAD) {
             revert Vault__invalidCollateralParams();
         }
-        // if (collateralPerToken[_token].LVM != 0)
-        //     supportedTokens.push(_token);
         collateralPerToken[_token] = Collateral({priceFeed: _priceFeed, LVM: _LVM});
     }
 
