@@ -4,6 +4,9 @@ pragma solidity ^0.8.13;
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
+//TODO
+//interest accrual automation ?
+
 /// @title RebaseToken pegged to ETH with interest accrual
 /// @notice This token represents ETH deposits in the vault and grows in value according to a global index
 /// @dev Only accounts with specific roles can mint, burn, or update the index

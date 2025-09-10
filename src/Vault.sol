@@ -8,8 +8,9 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {PriceConverter} from "./libs/PriceConverter.sol";
 
-// Consider renaming globalIndex → borrowIndex or debtIndex
-//to avoid confusion with the rebase token's own index.
+//TODO
+//interest accrual automation ?
+//chainlink cross chain logic integration ...
 
 /// @notice Struct for borrowing data associated per user, per collateral token address
 /// @param debt Amount of debt the user owes associated with specific token includes
