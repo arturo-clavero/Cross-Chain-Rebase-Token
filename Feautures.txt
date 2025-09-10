@@ -1,0 +1,16 @@
+1. Interest Acruel automated // lazy
+
+2. Cross chain token chainlink
+
+3. Emergency / Risk Modes
+Add a global pause or “emergency mode” if overcollateralization falls below critical levels.
+Could freeze minting/redeeming or force liquidation / just refund some lcoked colalteral to everyone ...
+Can be layered on top of your current health factor checks.
+Increase base with a linear ft ...
+Limit on borrow like 40 pc of liquidity... 
+
+4. Governance Hooks
+Multi-sig or DAO-controlled adjustments to:
+Collateral types
+Liquidation parameters
+Rebase thresholds
