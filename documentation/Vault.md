@@ -91,7 +91,7 @@ The Vault allows users to deposit ETH, borrow ETH against collateral, and repay 
 
 ## Collateral Management
 
-* `addCollateral(token, priceFeed, LVM)` – Add new supported token.
+* `modifyCollateral(token, priceFeed, LVM)` – Add new supported token.
 * `modifyCollateralPriceFeed(token, priceFeed)` – Update price feed.
 * `modifyCollateralLVM(token, LVM)` – Update loan-to-value multiplier (LVM).
 

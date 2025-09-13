@@ -33,7 +33,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
     //------- LIQUIDATOR TESTS -------//
     function testCannotLiquidateUnsupportedToken() public {
         address unsupportedToken = vm.addr(404);
-        borrow(user, WAD, true);
+        borrow(user, WAD, true, false);
 
         vm.prank(interestManager);
         vault.accrueBorrowDebtInterest(10e17);
@@ -53,7 +53,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
     }
 
     function testCannotLiquidateHealthyUser() public {
-        borrow(user, 1e18, true);
+        borrow(user, 1e18, true, false);
 
         vm.prank(liquidator);
         vm.expectRevert(Vault.Vault__userNotUnderCollaterlized.selector);
@@ -61,7 +61,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
     }
 
     function testLiquidatorMustSendETH() public {
-        borrow(user, 100 * WAD, true);
+        borrow(user, 100 * WAD, true, false);
 
         vm.prank(interestManager);
         vault.accrueBorrowDebtInterest(10e17);
@@ -72,7 +72,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
     }
 
     function testFullliquidity() public {
-        borrow(user, WAD, true);
+        borrow(user, WAD, true, false);
 
         vm.prank(interestManager);
         vault.accrueBorrowDebtInterest(10e17);
@@ -93,7 +93,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
     }
 
     function testExcessETHRefund() public {
-        borrow(user, WAD, true);
+        borrow(user, WAD, true, false);
 
         vm.prank(interestManager);
         vault.accrueBorrowDebtInterest(55e16);
@@ -114,7 +114,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
     }
 
     function testExcessETHInvalidTransfer() public {
-        borrow(user, WAD, true);
+        borrow(user, WAD, true, false);
         vm.prank(interestManager);
         vault.accrueBorrowDebtInterest(55e16);
 
@@ -198,7 +198,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
     }
 
     function testUserHealthy() public {
-        borrow(user, 2e18, true);
+        borrow(user, 2e18, true, false);
 
         console.log("interest a          : ", vault.getBorrowDebtIndex());
 
@@ -209,7 +209,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
         vault.accrueBorrowDebtInterest(1e17);
         console.log("interest b          : ", vault.getBorrowDebtIndex());
         console.log("liquidity threshold : ", vault.getLiquidityThreshold());
-        (uint256 debt, uint256 lockedCollateral,) = vault.debtPerTokenPerUser(user, address(collateralToken));
+        (uint256 debt,,) = vault.debtPerTokenPerUser(user, address(collateralToken));
 
         console.log("debt                : ", debt);
         console.log("debt accrued        : ", debt * vault.getBorrowDebtIndex() / WAD);
@@ -226,7 +226,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
     }
 
     function testUserUnhealthy() public {
-        borrow(user, 2e18, true);
+        borrow(user, 2e18, true, false);
 
         console.log("interest a          : ", vault.getBorrowDebtIndex());
 
@@ -237,7 +237,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
         vault.accrueBorrowDebtInterest(2e17);
         console.log("interest b          : ", vault.getBorrowDebtIndex());
         console.log("liquidity threshold : ", vault.getLiquidityThreshold());
-        (uint256 debt, uint256 lockedCollateral,) = vault.debtPerTokenPerUser(user, address(collateralToken));
+        (uint256 debt,,) = vault.debtPerTokenPerUser(user, address(collateralToken));
 
         console.log("debt                : ", debt);
         console.log("debt accrued        : ", debt * vault.getBorrowDebtIndex() / WAD);
@@ -255,7 +255,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
     function testLiquidateReward() public {
         uint256 repayment = WAD * 3;
 
-        borrow(user, WAD, true);
+        borrow(user, WAD, true, false);
         vm.prank(interestManager);
         vault.accrueBorrowDebtInterest(2 * WAD);
         hoax(liquidator, repayment);
@@ -267,7 +267,7 @@ contract TestVaultBorrow is Test, VaultLiquidatorBase {
         // (uint256 debt, ,) = vault.debtPerTokenPerUser(user, address(collateralToken));
         // assertEq(debt, 0);
 
-        borrow(user, WAD, true);
+        borrow(user, WAD, true, false);
         vm.prank(interestManager);
         vault.accrueBorrowDebtInterest(2 * WAD);
         vm.prank(liquidityManager);

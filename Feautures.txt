@@ -2,10 +2,17 @@
 
 3. Emergency / Risk Modes
 Add a global pause or “emergency mode” if overcollateralization falls below critical levels.
-Could freeze minting/redeeming or force liquidity / just refund some lcoked colalteral to everyone ...
-Can be layered on top of your current health factor checks.
+EMERGENCY :
+freeze minting/redeeming or force liquidity / just refund some lcoked colalteral to everyone
+increase unhealthy user rate based on liquidity available... 
+
+SEMI-EMERGENCY:
 Increase base with a linear ft ...
-Limit on borrow like 40 pc of liquidity... 
+
+DONT ALLOW BORROWING on x% liquidity ... 
+total liquidity / total lenders (=total supply * rate)
+if < min lend liquidity -> dont allow borrowing ... 
+
 pause / unpause
 Increase liquidityPrecision if vault liquidity is low to encourage liquidation.
 
@@ -15,7 +22,9 @@ statefull fuzz testing
 integration testing
 slither
 
-2. Cross chain token chainlink
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+Cross chain token chainlink
 
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 4. Governance Hooks

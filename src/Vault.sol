@@ -58,7 +58,7 @@ contract Vault is ReentrancyGuard, AccessControl {
     bytes32 public constant LIQUIDATOR_ROLE = keccak256("LIQUIDATOR_ROLE");
     bytes32 public constant LIQUIDATOR_MANAGER_ROLE = keccak256("LIQUIDATOR_MANAGER_ROLE");
     uint256 private constant MIN_LIQUIDITY_THRESHOLD = 1e17;
-
+    uint256 private constant MIN_LIQUIDITY_HEALTH_RATE = 4e17;
     /// @dev how soon you get liquidated (in WAD)
     uint256 private liquidityThreshold;
     /// @dev rewards from debt interests for liqborrowDebtIndexuidators (in WAD)
@@ -187,7 +187,6 @@ contract Vault is ReentrancyGuard, AccessControl {
 
         Debt storage userDebt = debtPerTokenPerUser[_user][_token];
         uint256 accruedDebt = userDebt.debt * borrowDebtIndex / WAD;
-        uint256 maxDebtCovered = ethFrom(_token, userDebt.lockedCollateral);
 
         if (isHealthy(_user, _token)) revert Vault__userNotUnderCollaterlized();
 
@@ -321,11 +320,17 @@ contract Vault is ReentrancyGuard, AccessControl {
             amountToBorrow = maxEthFrom(token, availableCollateral);
         }
 
-        if (totalLiquidity == 0 || (amountToBorrow > totalLiquidity)) {
-            revert Vault__notEnoughLiquidity(totalLiquidity);
+        uint256 maxAmount = maxExtractableLiquidity();
+        if (maxAmount == 0)
+            revert Vault__notEnoughLiquidity(maxAmount);
+        if (amountToBorrow > maxAmount){
+            if (takeMaxAvailable == false) {
+                revert Vault__notEnoughLiquidity(maxAmount);
+            }
+            amountToBorrow = maxAmount;
         }
-
         totalLiquidity -= amountToBorrow;
+
         uint256 scaledEth = amountToBorrow * WAD / borrowDebtIndex;
         totalBorrowScaled += scaledEth;
         debtPerTokenPerUser[msg.sender][token].debt += scaledEth;
@@ -337,15 +342,25 @@ contract Vault is ReentrancyGuard, AccessControl {
         emit UserBorrowedEth(msg.sender, token, amountToBorrow, amountToBorrow);
     }
 
+    function maxExtractableLiquidity() public view returns (uint256) {
+        uint256 liquidityHealthRate = getLiquidityHealthRate();
+        if (MIN_LIQUIDITY_HEALTH_RATE >= liquidityHealthRate)
+            return 0;
+        uint256 leftOver = liquidityHealthRate - MIN_LIQUIDITY_HEALTH_RATE;
+        return totalLiquidity * leftOver / WAD;
+    }
+
     /// @notice checks health status to evaluate if should liquidate
     /// @dev returns true if liquidity is required, false if no need to liquidate
     /// @param _user user's debt being checked
     /// @param _token user's token's debt being checked
-    function isHealthy(address _user, address _token) internal returns (bool) {
+    function isHealthy(address _user, address _token) internal view returns (bool) {
         Debt memory userDebt = debtPerTokenPerUser[_user][_token];
         uint256 accruedDebt = userDebt.debt * borrowDebtIndex / WAD;
         uint256 maxDebtCovered = ethFrom(_token, userDebt.lockedCollateral);
-        return (accruedDebt < maxDebtCovered * (WAD - liquidityThreshold) / WAD);
+        // return (accruedDebt < maxDebtCovered * (WAD - liquidityThreshold) / WAD);
+        //liquiditythreshold can not be WAD?
+        return (accruedDebt < maxDebtCovered * (WAD - getLiquidityUpdatedThreshold()) / WAD);
     }
 
     /// @notice Get the amount of collateral needed to borrow ETH
@@ -376,6 +391,36 @@ contract Vault is ReentrancyGuard, AccessControl {
         Collateral memory collateral = collateralPerToken[_token];
         if (collateral.priceFeed == address(0)) revert Vault__collateralTokenNotSupported(_token);
         return PriceConverter.getRates(amount, collateral.priceFeed);
+    }
+//0 bad, WAD very good
+//200 / 100 
+//should be internal
+    function getLiquidityHealthRate() internal view returns (uint256) {
+        if (totalLiquidity == 0)
+            return 0;
+        uint256 totalSupply = i_rebaseToken.totalSupply();
+        if (totalSupply == 0)
+            return WAD;
+        uint256 healthRate = totalLiquidity * WAD/ (totalSupply * i_rebaseToken.getGlobalIndex() / WAD);
+        return healthRate > WAD ? WAD : healthRate;
+    }
+//if liqquidity health rate = bad -> block withdraw, block borrow,
+// liquidity threshold increase 1 - healht rate
+
+//should be internal
+    function getLiquidityUpdatedThreshold() internal view returns (uint256){
+        uint256 liquidityHealth = getLiquidityHealthRate();
+        if (liquidityHealth == 0)
+            return WAD;
+
+        uint256 idealLiquidityThreshold = WAD - liquidityHealth;
+        return idealLiquidityThreshold > liquidityThreshold ? idealLiquidityThreshold : liquidityThreshold;        
+        // Xth 0.8 -> hr 0.2 good. 
+        // hr 0.1 XTH -> 0.9
+        //1 - hr = ideal healthrate
+        //0.1 -> 0.9 ideal
+        //0.8 -> 0.2 ideal 
+        //0
     }
 }
 
