@@ -17,7 +17,7 @@ contract VaultLiquidatorBase is Test, VaultBorrowBase {
         //grant permission
         vm.startPrank(admin);
         vault.grantRole(vault.LIQUIDATOR_ROLE(), liquidator);
-        vault.grantRole(vault.LIQUIDATOR_MANAGER_ROLE(), liquidityManager);
+        vault.grantRole(vault.DEFAULT_ADMIN_ROLE(), liquidityManager);
         vm.stopPrank();
     }
 }

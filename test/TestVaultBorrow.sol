@@ -25,8 +25,8 @@ contract VaultBorrowBase is Test, VaultCollateralBase {
 
         //grant permission
         vm.startPrank(admin);
-        vault.grantRole(vault.BORROW_INTEREST_MANAGER_ROLE(), interestManager);
-        vault.grantRole(vault.REBASETOKEN_INTEREST_MANAGER_ROLE(), rebaseTokenIndexManager);
+        vault.grantRole(vault.INTEREST_MANAGER_ROLE(), interestManager);
+        vault.grantRole(vault.INTEREST_MANAGER_ROLE(), rebaseTokenIndexManager);
         vm.stopPrank();
     }
 
@@ -309,16 +309,16 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
             abi.encodeWithSelector(
                 IAccessControl.AccessControlUnauthorizedAccount.selector,
                 user,
-                vault.REBASETOKEN_INTEREST_MANAGER_ROLE()
+                vault.INTEREST_MANAGER_ROLE()
             )
         );
-        vault.updateRebaseTokenInterest();
+        vault.accrueRebaseTokenInterest();
         vm.stopPrank();
     }
 
     function testUpdateRebaseTokenInterest_NoInterests() public {
         vm.prank(rebaseTokenIndexManager);
-        vault.updateRebaseTokenInterest();
+        vault.accrueRebaseTokenInterest();
 
         uint256 globalIndex = rebaseToken.getGlobalIndex();
         assertEq(globalIndex, WAD, "Index should remain 1.0 if no interest");
@@ -327,7 +327,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
     function testUpdateRebaseTokenInterest_WithBorrow() public {
         testFullRepayReturnsCollateralAndRefundsExcess();
         vm.prank(rebaseTokenIndexManager);
-        vault.updateRebaseTokenInterest();
+        vault.accrueRebaseTokenInterest();
         uint256 globalIndex = rebaseToken.getGlobalIndex();
         assertGt(globalIndex, WAD, "Index should grow with interest");
     }

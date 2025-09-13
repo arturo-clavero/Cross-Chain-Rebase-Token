@@ -50,7 +50,7 @@ Balances and debts are **always calculated relative to the global index**, so in
 ### 4. Interest Accrual
 
 * A **global interest index** (`globalIndex`) starts at `1e18`
-* It is periodically updated by an `INDEX_MANAGER_ROLE` account via `updateRebaseTokenInterest()`
+* It is periodically updated by an `INDEX_MANAGER_ROLE` account via `accrueRebaseTokenInterest()`
 * Example update formula:
 
   ```

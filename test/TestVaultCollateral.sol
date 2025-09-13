@@ -28,7 +28,7 @@ contract VaultCollateralBase is Test, VaultLendBase {
 
         //grant permission
         vm.startPrank(admin);
-        vault.grantRole(vault.COLLATERAL_MANAGER_ROLE(), collateralManager);
+        vault.grantRole(vault.DEFAULT_ADMIN_ROLE(), collateralManager);
         vm.stopPrank();
         //collateral token
         collateralToken = newCollateralToken();

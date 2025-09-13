@@ -51,15 +51,15 @@ contract Vault is ReentrancyGuard, AccessControl, Pausable {
     error Vault__notEnoughLiquidity(uint256 totalEthAvailable);
     error Vault__notEnoughCollateral(uint256 totalCollateralAvailable);
     error Vault__userNotUnderCollaterlized();
+    error Vault__invalidPriceConversion();
+    error Vault__invalidFunction();
 
     uint256 private constant WAD = 1e18;
-    bytes32 public constant BORROW_INTEREST_MANAGER_ROLE = keccak256("BORROW_INTEREST_MANAGER_ROLE");
-    bytes32 public constant REBASETOKEN_INTEREST_MANAGER_ROLE = keccak256("REBASETOKEN_INTEREST_MANAGER_ROLE");
-    bytes32 public constant COLLATERAL_MANAGER_ROLE = keccak256("COLLATERAL_MANAGER_ROLE");
+    bytes32 public constant INTEREST_MANAGER_ROLE = keccak256("INTEREST_MANAGER_ROLE");
     bytes32 public constant LIQUIDATOR_ROLE = keccak256("LIQUIDATOR_ROLE");
-    bytes32 public constant LIQUIDATOR_MANAGER_ROLE = keccak256("LIQUIDATOR_MANAGER_ROLE");
     uint256 private constant MIN_LIQUIDITY_THRESHOLD = 1e17;
-    uint256 private constant MIN_LIQUIDITY_HEALTH_RATE = 4e17;
+
+    uint256 private  minLiquidityHealthRate = 4e17;
     /// @dev how soon you get liquidated (in WAD)
     uint256 private liquidityThreshold;
     /// @dev rewards from debt interests for liqborrowDebtIndexuidators (in WAD)
@@ -100,6 +100,10 @@ contract Vault is ReentrancyGuard, AccessControl, Pausable {
 
     receive() external payable whenNotPaused {
         depositTo(msg.sender);
+    }
+
+    fallback() external payable {
+        revert Vault__invalidFunction();
     }
 
     /// @notice Deposit ETH into the vault for the sender
@@ -272,7 +276,7 @@ contract Vault is ReentrancyGuard, AccessControl, Pausable {
     /// @notice helper to add or modify collateral parameters
     function modifyCollateral(address _token, address _priceFeed, uint256 _LVM)
         external
-        onlyRole(COLLATERAL_MANAGER_ROLE)
+        onlyRole(DEFAULT_ADMIN_ROLE)
     {
         if (_token == address(0) || _priceFeed == address(0) || _LVM < WAD) {
             revert Vault__invalidCollateralParams();
@@ -283,9 +287,9 @@ contract Vault is ReentrancyGuard, AccessControl, Pausable {
     /// @notice Update the rebase tokens interest based on total deposits and total interests
     /// function should be called periodically and this contracts address needs to be granted role
     /// to access the rebase token function of INDEX_MANAGER_ROLE by the rebasetoken contract
-    function updateRebaseTokenInterest() 
+    function accrueRebaseTokenInterest() 
         external 
-        onlyRole(REBASETOKEN_INTEREST_MANAGER_ROLE) 
+        onlyRole(INTEREST_MANAGER_ROLE) 
     {
         uint256 rawSupply = i_rebaseToken.totalSupply();
         if (rawSupply == 0) return;
@@ -298,34 +302,45 @@ contract Vault is ReentrancyGuard, AccessControl, Pausable {
     /// @param rate Interest rate to apply (in WAD units, e.g., 1e16 = 1%)
     function accrueBorrowDebtInterest(uint256 rate) 
         external 
-        onlyRole(BORROW_INTEREST_MANAGER_ROLE) 
+        onlyRole(INTEREST_MANAGER_ROLE) 
     {
         borrowDebtIndex = borrowDebtIndex * (WAD + rate) / WAD;
     }
 
-    /// @notice Liquidator Manager can update the liquidityThreshold
+    /// @notice Admin can update the minLiquidityHealthRate
+    /// @dev threshold refers to the minimum reserved liquidity (liquidity that can not be borrowed)
+    /// @param _threshold is the new minLiquidityHealthRate
+    function setMinLiquidityHealthRate(uint256 _threshold) 
+        external 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
+    {
+        if (_threshold < MIN_LIQUIDITY_THRESHOLD || _threshold > WAD) revert Vault__invalidAmount();
+        minLiquidityHealthRate = _threshold;
+    }
+
+    /// @notice Admin can update the liquidityThreshold
     /// @dev threshold refers to the minimum collateral ratio a user must maintain to avoid liquidity
     /// @param _threshold is the new liquidityThreshold
     function setLiquidityThreshold(uint256 _threshold) 
         external 
-        onlyRole(LIQUIDATOR_MANAGER_ROLE) 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
     {
         if (_threshold < MIN_LIQUIDITY_THRESHOLD || _threshold > WAD) revert Vault__invalidAmount();
         liquidityThreshold = _threshold;
     }
 
-    /// @notice Liquidator Manager can update the liquidityPrecision
+    /// @notice Admin can update the liquidityPrecision
     /// @dev precision refers to the percentage reward they can keep
     /// @param _precision is the new liquidityPrecision
     function setLiquidityPrecision(uint256 _precision) 
         external 
-        onlyRole(LIQUIDATOR_MANAGER_ROLE) 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
     {
         if (_precision > WAD) revert Vault__invalidAmount();
         liquidityPrecision = _precision;
     }
 
-        /// @notice Liquidates a user’s position if undercollateralized
+    /// @notice Liquidates a user’s position if undercollateralized
     /// @dev The liquidator must send ETH to cover part or all of the user’s debt
     ///      Collateral is seized proportionally to the ETH paid
     /// @param _user The address of the user being liquidated
@@ -392,9 +407,9 @@ contract Vault is ReentrancyGuard, AccessControl, Pausable {
 
     function getMaxExtractableLiquidity() public view returns (uint256) {
         uint256 liquidityHealthRate = getLiquidityHealthRate();
-        if (MIN_LIQUIDITY_HEALTH_RATE >= liquidityHealthRate)
+        if (minLiquidityHealthRate >= liquidityHealthRate)
             return 0;
-        uint256 leftOver = liquidityHealthRate - MIN_LIQUIDITY_HEALTH_RATE;
+        uint256 leftOver = liquidityHealthRate - minLiquidityHealthRate;
         return totalLiquidity * leftOver / WAD;
     }
 
@@ -420,8 +435,6 @@ contract Vault is ReentrancyGuard, AccessControl, Pausable {
         Debt memory userDebt = debtPerTokenPerUser[_user][_token];
         uint256 accruedDebt = userDebt.debt * borrowDebtIndex / WAD;
         uint256 maxDebtCovered = ethFrom(_token, userDebt.lockedCollateral);
-        // return (accruedDebt < maxDebtCovered * (WAD - liquidityThreshold) / WAD);
-        //liquiditythreshold can not be WAD?
         return (accruedDebt < maxDebtCovered * (WAD - getLiquidityUpdatedThreshold()) / WAD);
     }
 

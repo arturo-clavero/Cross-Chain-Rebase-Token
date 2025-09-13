@@ -20,7 +20,7 @@ The Vault allows users to deposit ETH, borrow ETH against collateral, and repay 
 ## Roles
 
 * `INTEREST_MANAGER_ROLE` – Can update global interest index
-* `COLLATERAL_MANAGER_ROLE` – Can add or modify supported collateral
+* `DEFAULT_ADMIN_ROLE` – Can add or modify supported collateral
 * `LIQUIDATOR_ROLE` (optional) – Any address may call liquidity, but role can be restricted
 
 ---
