@@ -122,7 +122,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
 
     function testBorrowOk(uint256 amountToBorrow) public {
         vm.assume(amountToBorrow > 0);
-        vm.assume(amountToBorrow <= vault.maxExtractableLiquidity());
+        vm.assume(amountToBorrow <= vault.getMaxExtractableLiquidity());
         depositCollateral(user, amountToBorrow * 2, true);
         preCheckBorrow(user);
         borrow(user, amountToBorrow, false, false);
@@ -158,7 +158,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
         //borrow attempt
         depositCollateral(user, COLLATERAL_TOKEN_FUND_AMOUNT, false);
         preCheckBorrow(user);
-        console.log("max possible    : ", vault.maxExtractableLiquidity());
+        console.log("max possible    : ", vault.getMaxExtractableLiquidity());
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(Vault.Vault__notEnoughLiquidity.selector, 0));
         vault.borrow(BORROW_AMOUNT, address(collateralToken), true);
@@ -169,7 +169,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
 
     function testBorrowNotEnoughLiquidityDontTakeMax() public{
         uint256 totalLiquidity = vault.getTotalLiquidity();
-        uint256 maxLiquidity = vault.maxExtractableLiquidity();
+        uint256 maxLiquidity = vault.getMaxExtractableLiquidity();
         depositCollateral(user, totalLiquidity * 2 , true);
         preCheckBorrow(user);
         vm.startPrank(user);
@@ -274,7 +274,7 @@ contract TestVaultBorrow is Test, VaultBorrowBase {
     }
 
     function testRepayOk(uint256 amountToBorrow, uint256 amountToRepay) public {
-        uint256 totalLiquidity = vault.maxExtractableLiquidity();
+        uint256 totalLiquidity = vault.getMaxExtractableLiquidity();
         vm.assume(amountToBorrow > 0);
         vm.assume(amountToBorrow <= totalLiquidity);
         vm.assume(amountToRepay > 0);

@@ -1,17 +1,4 @@
-1. Interest Acruel automated // lazy
-
-3. Emergency / Risk Modes
-Add a global pause or “emergency mode” if overcollateralization falls below critical levels.
-EMERGENCY :
-freeze minting/redeeming or force liquidity / just refund some lcoked colalteral to everyone
-increase unhealthy user rate based on liquidity available... 
-
-SEMI-EMERGENCY:
-Increase base with a linear ft ...
-
-DONT ALLOW BORROWING on x% liquidity ... 
-total liquidity / total lenders (=total supply * rate)
-if < min lend liquidity -> dont allow borrowing ... 
+Interest Acruel automated // lazy
 
 pause / unpause
 Increase liquidityPrecision if vault liquidity is low to encourage liquidation.
